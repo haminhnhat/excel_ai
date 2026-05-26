@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
 from app.ai_parser import parse_user_command
-from app.config_loader import load_model_map
+from app.config_loader import load_model_map_for_profile
 from app.excel_controller import ExcelController
 from app.utils import format_value
 from app.validator import validate_action_plan
@@ -23,16 +23,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run one AI Excel scenario from CLI.")
     parser.add_argument("--excel", required=True, help="Path to source Excel model")
     parser.add_argument("--command", required=True, help="Natural language command")
-    parser.add_argument("--map", default=os.getenv("MODEL_MAP_PATH", "config/model_map.yaml"))
+    parser.add_argument("--map", default=os.getenv("MODEL_MAP_PATH"), help="Optional explicit model_map.yaml path")
+    parser.add_argument("--profile", default=os.getenv("MODEL_PROFILE"), help="Model profile under config/profiles/<name>")
     parser.add_argument("--engine", default=os.getenv("EXCEL_ENGINE", "auto"), choices=["auto", "xlwings", "openpyxl"])
     parser.add_argument("--output-dir", default=os.getenv("OUTPUT_DIR", "outputs"))
     args = parser.parse_args()
 
-    model_map_path = Path(args.map)
-    if not model_map_path.is_absolute():
-        model_map_path = ROOT / model_map_path
-
-    model_map = load_model_map(model_map_path)
+    model_map, model_map_path = load_model_map_for_profile(profile=args.profile, explicit_path=args.map)
+    print(f"Using model map: {model_map_path}")
     plan = parse_user_command(args.command, model_map)
     plan = validate_action_plan(plan, model_map)
 

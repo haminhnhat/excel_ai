@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .ai_parser import parse_user_command
-from .config_loader import load_model_map
+from .config_loader import list_profiles, load_model_map_for_profile, resolve_model_map_path
 from .excel_controller import ExcelController
 from .utils import format_value
 from .validator import ValidationError, validate_action_plan
@@ -19,9 +19,6 @@ from .validator import ValidationError, validate_action_plan
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-MODEL_MAP_PATH = Path(os.getenv("MODEL_MAP_PATH", BASE_DIR / "config" / "model_map.yaml"))
-if not MODEL_MAP_PATH.is_absolute():
-    MODEL_MAP_PATH = BASE_DIR / MODEL_MAP_PATH
 
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "outputs"))
 if not OUTPUT_DIR.is_absolute():
@@ -59,9 +56,13 @@ def index() -> str:
 
 @app.get("/health")
 def health() -> dict:
+    selected_profile = os.getenv("MODEL_PROFILE")
+    map_path = resolve_model_map_path(profile=selected_profile)
     return {
         "status": "ok",
-        "model_map_path": str(MODEL_MAP_PATH),
+        "model_profile": selected_profile,
+        "available_profiles": list_profiles(BASE_DIR),
+        "model_map_path": str(map_path),
         "default_model_path": str(_resolve_model_path()),
         "engine": os.getenv("EXCEL_ENGINE", "auto"),
         "ai_provider": os.getenv("AI_PROVIDER", "mock"),
@@ -73,9 +74,10 @@ async def run_scenario(
     command: str = Form(...),
     file: Optional[UploadFile] = File(default=None),
     engine: Optional[str] = Form(default=None),
+    model_profile: Optional[str] = Form(default=None),
 ) -> dict:
     try:
-        model_map = load_model_map(MODEL_MAP_PATH)
+        model_map, model_map_path = load_model_map_for_profile(profile=model_profile)
 
         if file is not None and file.filename:
             safe_name = Path(file.filename).name
@@ -104,6 +106,8 @@ async def run_scenario(
         scenario_file = Path(result.scenario_file)
         return {
             "ok": True,
+            "model_map_path": str(model_map_path),
+            "model_profile": model_profile or os.getenv("MODEL_PROFILE"),
             "action_plan": plan.model_dump(),
             "result": result.model_dump(),
             "formatted_outputs": {

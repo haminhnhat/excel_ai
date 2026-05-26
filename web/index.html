@@ -37,6 +37,8 @@
       <div class="row">
         <label>Excel file:</label>
         <input id="file" type="file" accept=".xlsx,.xlsm" />
+        <label>Profile:</label>
+        <input id="model_profile" type="text" placeholder="default / yen_my / project_a" style="min-width: 170px" />
         <label>Engine:</label>
         <select id="engine">
           <option value="auto">auto</option>
@@ -67,6 +69,8 @@ async function runScenario() {
   const fd = new FormData();
   fd.append('command', document.getElementById('command').value);
   fd.append('engine', document.getElementById('engine').value);
+  const profile = document.getElementById('model_profile').value.trim();
+  if (profile) fd.append('model_profile', profile);
   const file = document.getElementById('file').files[0];
   if (file) fd.append('file', file);
 

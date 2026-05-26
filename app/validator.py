@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from .schemas import ActionPlan
 
@@ -14,9 +14,9 @@ def validate_action_plan(plan: ActionPlan, model_map: Dict[str, Any]) -> ActionP
     outputs = model_map.get("outputs", {})
     errors: list[str] = []
 
-    if not plan.changes:
-        errors.append("Action plan contains no changes.")
-
+    # Empty changes are allowed for read-only output questions such as:
+    # "Cho tôi NPV và IRR hiện tại". The Excel controller will copy the file
+    # and read mapped outputs without writing any input cell.
     for change in plan.changes:
         meta = inputs.get(change.parameter)
         if not meta:
@@ -24,6 +24,9 @@ def validate_action_plan(plan: ActionPlan, model_map: Dict[str, Any]) -> ActionP
             continue
         if not meta.get("editable", True):
             errors.append(f"Parameter is not editable: {change.parameter}")
+            continue
+        if not (meta.get("cell") or meta.get("cells") or meta.get("range")):
+            errors.append(f"Parameter mapping must define cell, cells, or range: {change.parameter}")
             continue
 
         if isinstance(change.value, (int, float)):

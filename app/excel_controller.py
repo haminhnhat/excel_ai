@@ -111,6 +111,33 @@ class ExcelController:
         if isinstance(formula, str) and formula.startswith("="):
             raise ExcelControllerError(f"Refusing to overwrite formula cell: {sheet}!{cell}")
 
+    def _input_targets(self, meta: Dict[str, Any]) -> list[str]:
+        """Return target cell addresses for one input mapping.
+
+        A mapping can use either:
+        - cell: "D12"
+        - cells: ["D12", "E12"]
+        - range: "D12:H12"
+
+        The same new value is applied to all target cells. This is useful for
+        financial models where one assumption, such as loan interest rate, is
+        hardcoded across multiple period columns.
+        """
+        if meta.get("cell"):
+            return [str(meta["cell"])]
+        if meta.get("cells"):
+            return [str(c) for c in meta["cells"]]
+        if meta.get("range"):
+            from openpyxl.utils import get_column_letter, range_boundaries
+
+            min_col, min_row, max_col, max_row = range_boundaries(str(meta["range"]))
+            cells: list[str] = []
+            for row in range(min_row, max_row + 1):
+                for col in range(min_col, max_col + 1):
+                    cells.append(f"{get_column_letter(col)}{row}")
+            return cells
+        raise ExcelControllerError("Input mapping must define one of: cell, cells, range.")
+
     def _run_with_xlwings(self, workbook_path: Path, plan: ActionPlan) -> Tuple[list[AppliedChange], Dict[str, OutputValue]]:
         import xlwings as xw
 
@@ -125,22 +152,22 @@ class ExcelController:
             for change in plan.changes:
                 meta = self.model_map["inputs"][change.parameter]
                 sheet_name = meta["sheet"]
-                cell_addr = meta["cell"]
-                rng = book.sheets[sheet_name].range(cell_addr)
-                old_value = rng.value
-                self._check_formula_overwrite(rng.formula, sheet_name, cell_addr, meta.get("allow_formula_overwrite", False))
-                new_value = self._target_value(old_value, change.operation, change.value)
-                rng.value = new_value
-                applied.append(
-                    AppliedChange(
-                        parameter=change.parameter,
-                        sheet=sheet_name,
-                        cell=cell_addr,
-                        old_value=old_value,
-                        new_value=new_value,
-                        reason=change.reason,
+                for cell_addr in self._input_targets(meta):
+                    rng = book.sheets[sheet_name].range(cell_addr)
+                    old_value = rng.value
+                    self._check_formula_overwrite(rng.formula, sheet_name, cell_addr, meta.get("allow_formula_overwrite", False))
+                    new_value = self._target_value(old_value, change.operation, change.value)
+                    rng.value = new_value
+                    applied.append(
+                        AppliedChange(
+                            parameter=change.parameter,
+                            sheet=sheet_name,
+                            cell=cell_addr,
+                            old_value=old_value,
+                            new_value=new_value,
+                            reason=change.reason,
+                        )
                     )
-                )
 
             # Force full recalc. CalculateFullRebuild exists in Excel COM on Windows.
             try:
@@ -182,24 +209,24 @@ class ExcelController:
         for change in plan.changes:
             meta = self.model_map["inputs"][change.parameter]
             sheet_name = meta["sheet"]
-            cell_addr = meta["cell"]
             ws = wb[sheet_name]
-            cell = ws[cell_addr]
-            old_value = cell.value
-            formula = old_value if isinstance(old_value, str) and old_value.startswith("=") else None
-            self._check_formula_overwrite(formula, sheet_name, cell_addr, meta.get("allow_formula_overwrite", False))
-            new_value = self._target_value(old_value, change.operation, change.value)
-            cell.value = new_value
-            applied.append(
-                AppliedChange(
-                    parameter=change.parameter,
-                    sheet=sheet_name,
-                    cell=cell_addr,
-                    old_value=old_value,
-                    new_value=new_value,
-                    reason=change.reason,
+            for cell_addr in self._input_targets(meta):
+                cell = ws[cell_addr]
+                old_value = cell.value
+                formula = old_value if isinstance(old_value, str) and old_value.startswith("=") else None
+                self._check_formula_overwrite(formula, sheet_name, cell_addr, meta.get("allow_formula_overwrite", False))
+                new_value = self._target_value(old_value, change.operation, change.value)
+                cell.value = new_value
+                applied.append(
+                    AppliedChange(
+                        parameter=change.parameter,
+                        sheet=sheet_name,
+                        cell=cell_addr,
+                        old_value=old_value,
+                        new_value=new_value,
+                        reason=change.reason,
+                    )
                 )
-            )
 
         # Ask Excel to recalculate when the workbook is opened.
         try:
