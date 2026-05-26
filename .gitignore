@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.xlsx
+uploads/*.xlsx
 .Python
 .venv/
 venv/
