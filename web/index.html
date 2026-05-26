@@ -5,72 +5,798 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Excel AI Controller</title>
   <style>
-    :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #111827; background: #f3f4f6; }
-    body { margin: 0; padding: 32px; }
-    .wrap { max-width: 980px; margin: 0 auto; }
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; box-shadow: 0 10px 24px rgba(15,23,42,.06); padding: 24px; }
-    h1 { margin: 0 0 8px; font-size: 28px; }
-    p { color: #4b5563; line-height: 1.55; }
-    textarea { width: 100%; min-height: 110px; resize: vertical; padding: 14px; border-radius: 12px; border: 1px solid #d1d5db; font-size: 15px; box-sizing: border-box; }
-    input, select { padding: 10px 12px; border-radius: 10px; border: 1px solid #d1d5db; }
-    button { padding: 12px 18px; border: 0; border-radius: 12px; background: #111827; color: #fff; font-weight: 700; cursor: pointer; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
-    .result { margin-top: 22px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; white-space: pre-wrap; overflow-x: auto; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
-    .metric { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; }
-    .metric .k { font-size: 13px; color: #6b7280; }
-    .metric .v { margin-top: 4px; font-size: 18px; font-weight: 750; }
-    a { color: #0f766e; font-weight: 700; }
-    .small { font-size: 13px; color: #6b7280; }
+    :root {
+      --bg: #eef2f7;
+      --panel: rgba(255, 255, 255, 0.86);
+      --panel-strong: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-soft: #dbeafe;
+      --good: #059669;
+      --bad: #dc2626;
+      --warn: #d97706;
+      --shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 34rem),
+        radial-gradient(circle at 80% 10%, rgba(20, 184, 166, 0.13), transparent 28rem),
+        linear-gradient(135deg, #f8fafc 0%, var(--bg) 100%);
+    }
+
+    a { color: inherit; }
+
+    .page {
+      width: min(1180px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 34px 0 44px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      background: linear-gradient(135deg, #2563eb, #14b8a6);
+      color: white;
+      font-weight: 900;
+      box-shadow: 0 12px 30px rgba(37, 99, 235, 0.24);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 3px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.72);
+      font-size: 13px;
+      color: var(--muted);
+      backdrop-filter: blur(12px);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--warn);
+    }
+    .dot.ok { background: var(--good); }
+    .dot.err { background: var(--bad); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(219, 227, 239, .9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .command-card { padding: 24px; }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: #1e40af;
+      font-weight: 750;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .title {
+      margin: 14px 0 8px;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.02;
+      letter-spacing: -0.055em;
+    }
+
+    .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    .field-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+      font-weight: 760;
+      font-size: 14px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 134px;
+      resize: vertical;
+      padding: 15px 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 18px;
+      font: inherit;
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.92);
+      outline: none;
+      transition: border .15s, box-shadow .15s;
+    }
+
+    textarea:focus,
+    input:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, .12);
+    }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 12px 0 20px;
+    }
+
+    .chip {
+      border: 1px solid #cbd5e1;
+      background: rgba(255,255,255,.74);
+      color: #334155;
+      border-radius: 999px;
+      padding: 8px 11px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: transform .12s, background .12s, border .12s;
+    }
+    .chip:hover {
+      transform: translateY(-1px);
+      background: white;
+      border-color: var(--primary);
+      color: #1d4ed8;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1.15fr .7fr .52fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .control {
+      min-width: 0;
+    }
+
+    .control label {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: .045em;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 14px;
+      background: rgba(255,255,255,.9);
+      color: var(--text);
+      font: inherit;
+      outline: none;
+    }
+
+    input[type="file"] {
+      padding: 8px 10px;
+      color: var(--muted);
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 15px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 820;
+      cursor: pointer;
+      transition: transform .12s, box-shadow .12s, opacity .12s;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), #14b8a6);
+      color: white;
+      box-shadow: 0 14px 32px rgba(37, 99, 235, .24);
+    }
+    .btn-secondary {
+      background: #ffffff;
+      color: #334155;
+      border: 1px solid var(--line);
+    }
+
+    .small {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .side-card {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .mini-title {
+      margin: 0 0 2px;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,.68);
+    }
+
+    .step-no {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 900;
+    }
+
+    .step p { margin: 3px 0 0; }
+
+    .result-section {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+    }
+
+    .result-header h2 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+
+    .run-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0 20px 20px;
+    }
+
+    .metric {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .metric .k {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+      text-transform: uppercase;
+      letter-spacing: .045em;
+      font-weight: 800;
+    }
+
+    .metric .v {
+      margin-top: 14px;
+      font-size: 20px;
+      line-height: 1.15;
+      font-weight: 900;
+      letter-spacing: -0.035em;
+      word-break: break-word;
+    }
+
+    .panel-body { padding: 0 20px 20px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid #eef2f7;
+      vertical-align: top;
+    }
+
+    th {
+      color: #475569;
+      background: #f8fafc;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .download-box {
+      display: none;
+      margin: 0 20px 20px;
+      padding: 14px;
+      border: 1px solid #bbf7d0;
+      background: #f0fdf4;
+      border-radius: 18px;
+      color: #166534;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .download-box a {
+      display: inline-flex;
+      text-decoration: none;
+      background: #16a34a;
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 13px;
+      font-weight: 860;
+    }
+
+    .alert {
+      display: none;
+      margin: 0 20px 20px;
+      border-radius: 18px;
+      padding: 14px;
+      border: 1px solid #fed7aa;
+      background: #fff7ed;
+      color: #9a3412;
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .alert.error {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      background: white;
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 14px 16px;
+      font-weight: 840;
+      color: #334155;
+      background: #f8fafc;
+    }
+
+    pre {
+      margin: 0;
+      padding: 15px;
+      overflow-x: auto;
+      max-height: 360px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(37,99,235,.18);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      display: none;
+    }
+    .spinner.show { display: inline-block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 920px) {
+      .hero { grid-template-columns: 1fr; }
+      .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (max-width: 560px) {
+      .page { width: min(100% - 22px, 1180px); padding-top: 18px; }
+      .command-card, .side-card { padding: 18px; }
+      .metrics-grid { grid-template-columns: 1fr; }
+      .result-header { align-items: flex-start; flex-direction: column; }
+      .download-box { align-items: flex-start; flex-direction: column; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Excel AI Controller</h1>
-      <p>Nhập câu lệnh để tạo scenario cho financial model Excel. Hệ thống sẽ parse command, sửa input cell trong mapping, recalculate workbook và trả kết quả.</p>
-
-      <label><strong>Câu lệnh</strong></label>
-      <textarea id="command">Tăng tổng mức đầu tư từ 1000 tỷ lên 1200 tỷ. Trả ra lợi nhuận sau thuế, NPV dự án, IRR dự án, NPV chủ đầu tư, IRR chủ đầu tư.</textarea>
-
-      <div class="row">
-        <label>Excel file:</label>
-        <input id="file" type="file" accept=".xlsx,.xlsm" />
-        <label>Profile:</label>
-        <input id="model_profile" type="text" placeholder="default / yen_my / project_a" style="min-width: 170px" />
-        <label>Engine:</label>
-        <select id="engine">
-          <option value="auto">auto</option>
-          <option value="xlwings">xlwings</option>
-          <option value="openpyxl">openpyxl</option>
-        </select>
-        <button id="runBtn" onclick="runScenario()">Run scenario</button>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">XL</div>
+        <div>
+          <h1>Excel AI Controller</h1>
+          <span>Financial model scenario runner</span>
+        </div>
       </div>
-      <div class="small">Nếu không upload file, backend sẽ dùng MODEL_PATH trong file .env.</div>
+      <div class="status-pill" title="Backend health">
+        <span id="healthDot" class="dot"></span>
+        <span id="healthText">Checking backend...</span>
+      </div>
+    </header>
 
-      <div id="metrics" class="grid"></div>
-      <div id="download"></div>
-      <pre id="result" class="result">Ready.</pre>
-    </div>
-  </div>
+    <section class="hero">
+      <div class="card command-card">
+        <span class="eyebrow">Natural language → Excel scenario</span>
+        <h2 class="title">Chạy financial model bằng một câu lệnh.</h2>
+        <p class="subtitle">
+          Nhập command tiếng Việt, chọn profile và engine. Backend sẽ parse command, validate mapping, copy workbook, tính lại Excel và trả NPV/IRR.
+        </p>
+
+        <div class="field-label">
+          <span>Câu lệnh</span>
+          <span class="small" id="charCount">0 ký tự</span>
+        </div>
+        <textarea id="command" spellcheck="false">Tạo scenario xấu: TMĐT tăng 15%, giá bán giảm 5%, lãi vay 8%</textarea>
+
+        <div class="examples" id="examples"></div>
+
+        <div class="controls">
+          <div class="control">
+            <label>Excel file tùy chọn</label>
+            <input id="file" type="file" accept=".xlsx,.xlsm" />
+          </div>
+          <div class="control">
+            <label>Profile</label>
+            <input id="model_profile" list="profiles" type="text" placeholder="yen_my" value="yen_my" />
+            <datalist id="profiles"></datalist>
+          </div>
+          <div class="control">
+            <label>Engine</label>
+            <select id="engine">
+              <option value="xlwings" selected>xlwings</option>
+              <option value="auto">auto</option>
+              <option value="openpyxl">openpyxl</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="runBtn" class="btn-primary" onclick="runScenario()">Run scenario</button>
+          <button class="btn-secondary" onclick="clearResult()">Clear</button>
+          <button class="btn-secondary" onclick="useLastCommand()">Last command</button>
+          <span class="small">Nếu không upload file, backend dùng <strong>MODEL_PATH</strong> trong `.env`.</span>
+        </div>
+      </div>
+
+      <aside class="card side-card">
+        <div>
+          <h3 class="mini-title">Quy trình chạy</h3>
+          <p class="small">Thiết kế theo hướng an toàn: AI/parser không sửa Excel trực tiếp; controller chỉ ghi vào cells đã whitelist.</p>
+        </div>
+        <div class="step">
+          <div class="step-no">1</div>
+          <div><strong>Parse command</strong><p class="small">Câu lệnh được chuyển thành action plan có cấu trúc.</p></div>
+        </div>
+        <div class="step">
+          <div class="step-no">2</div>
+          <div><strong>Validate mapping</strong><p class="small">Chặn formula cell, parameter ngoài whitelist và value vượt range.</p></div>
+        </div>
+        <div class="step">
+          <div class="step-no">3</div>
+          <div><strong>Run scenario</strong><p class="small">Copy workbook, ghi input, recalculate bằng Excel và đọc output.</p></div>
+        </div>
+        <div class="step">
+          <div class="step-no">4</div>
+          <div><strong>Audit output</strong><p class="small">Hiển thị applied changes, outputs, warnings và file scenario.</p></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="card result-section">
+      <div class="result-header">
+        <div>
+          <h2>Scenario result</h2>
+          <div class="small" id="resultSubtitle">Chưa chạy scenario.</div>
+        </div>
+        <div class="run-state"><span id="spinner" class="spinner"></span><span id="runStateText">Idle</span></div>
+      </div>
+
+      <div id="alert" class="alert"></div>
+      <div id="download" class="download-box"></div>
+      <div id="metrics" class="metrics-grid"></div>
+
+      <div class="panel-body">
+        <details id="changesDetails" open>
+          <summary>Applied changes</summary>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Parameter</th><th>Sheet</th><th>Cell</th><th>Old value</th><th>New value</th></tr></thead>
+              <tbody id="changesBody"><tr><td colspan="5" class="small">No changes yet.</td></tr></tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+
+      <div class="panel-body">
+        <details>
+          <summary>Action plan JSON</summary>
+          <pre id="planJson">{}</pre>
+        </details>
+      </div>
+
+      <div class="panel-body">
+        <details>
+          <summary>Full API response</summary>
+          <pre id="rawJson">Ready.</pre>
+        </details>
+      </div>
+    </section>
+  </main>
 
 <script>
-async function runScenario() {
-  const btn = document.getElementById('runBtn');
-  const result = document.getElementById('result');
+const examples = [
+  'Cho tôi NPV và IRR hiện tại',
+  'Tăng lãi vay lên 8%',
+  'TMĐT tăng 15%',
+  'Giảm giá bán 5%',
+  'VAT 10% TNDN 20%',
+  'Tạo scenario xấu: TMĐT tăng 15%, giá bán giảm 5%, lãi vay 8%'
+];
+
+const labels = {
+  project_irr: 'Project IRR',
+  project_npv: 'Project NPV',
+  equity_irr: 'Equity IRR',
+  equity_npv: 'Equity NPV',
+  profit_after_tax: 'Profit after tax',
+  roi: 'ROI',
+  total_investment: 'Total investment',
+  bank_loan: 'Bank loan',
+  vat_rate: 'VAT',
+  cit_rate: 'CIT'
+};
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function prettyKey(key) {
+  return labels[key] || String(key).replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function setLoading(isLoading) {
+  document.getElementById('runBtn').disabled = isLoading;
+  document.getElementById('spinner').classList.toggle('show', isLoading);
+  document.getElementById('runStateText').textContent = isLoading ? 'Running Excel...' : 'Idle';
+}
+
+function setAlert(message, type = 'warn') {
+  const alert = document.getElementById('alert');
+  if (!message) {
+    alert.style.display = 'none';
+    alert.textContent = '';
+    alert.className = 'alert';
+    return;
+  }
+  alert.style.display = 'block';
+  alert.className = type === 'error' ? 'alert error' : 'alert';
+  alert.textContent = message;
+}
+
+function renderExamples() {
+  const box = document.getElementById('examples');
+  box.innerHTML = examples.map(x => `<button type="button" class="chip" onclick="setCommand('${escapeHtml(x)}')">${escapeHtml(x)}</button>`).join('');
+}
+
+function setCommand(text) {
+  document.getElementById('command').value = text;
+  updateCharCount();
+}
+
+function useLastCommand() {
+  const last = localStorage.getItem('excel_ai_last_command');
+  if (last) setCommand(last);
+}
+
+function updateCharCount() {
+  const text = document.getElementById('command').value || '';
+  document.getElementById('charCount').textContent = `${text.length} ký tự`;
+}
+
+function clearResult() {
+  document.getElementById('metrics').innerHTML = '';
+  document.getElementById('download').style.display = 'none';
+  document.getElementById('download').innerHTML = '';
+  document.getElementById('changesBody').innerHTML = '<tr><td colspan="5" class="small">No changes yet.</td></tr>';
+  document.getElementById('planJson').textContent = '{}';
+  document.getElementById('rawJson').textContent = 'Ready.';
+  document.getElementById('resultSubtitle').textContent = 'Chưa chạy scenario.';
+  setAlert('');
+}
+
+async function loadHealth() {
+  const dot = document.getElementById('healthDot');
+  const text = document.getElementById('healthText');
+  try {
+    const res = await fetch('/health');
+    const data = await res.json();
+    if (!res.ok) throw new Error('health failed');
+    dot.className = 'dot ok';
+    text.textContent = `Backend OK · ${data.engine || 'engine'} · ${data.ai_provider || 'mock'}`;
+    const list = document.getElementById('profiles');
+    const profiles = data.available_profiles || [];
+    list.innerHTML = profiles.map(p => `<option value="${escapeHtml(p)}"></option>`).join('');
+    if (!document.getElementById('model_profile').value && data.model_profile) {
+      document.getElementById('model_profile').value = data.model_profile;
+    }
+  } catch (err) {
+    dot.className = 'dot err';
+    text.textContent = 'Backend offline';
+  }
+}
+
+function renderMetrics(outputs) {
   const metrics = document.getElementById('metrics');
-  const download = document.getElementById('download');
-  btn.disabled = true;
-  result.textContent = 'Running...';
-  metrics.innerHTML = '';
-  download.innerHTML = '';
+  const entries = Object.entries(outputs || {});
+  if (!entries.length) {
+    metrics.innerHTML = '';
+    return;
+  }
+  metrics.innerHTML = entries.map(([k, v]) => `
+    <div class="metric">
+      <div class="k">${escapeHtml(prettyKey(k))}</div>
+      <div class="v">${escapeHtml(v || '—')}</div>
+    </div>
+  `).join('');
+}
+
+function renderChanges(changes) {
+  const body = document.getElementById('changesBody');
+  if (!changes || !changes.length) {
+    body.innerHTML = '<tr><td colspan="5" class="small">Read-only command. No input cells were changed.</td></tr>';
+    return;
+  }
+  body.innerHTML = changes.map(c => `
+    <tr>
+      <td><strong>${escapeHtml(c.parameter)}</strong></td>
+      <td>${escapeHtml(c.sheet)}</td>
+      <td>${escapeHtml(c.cell)}</td>
+      <td>${escapeHtml(c.old_value ?? '')}</td>
+      <td><strong>${escapeHtml(c.new_value ?? '')}</strong></td>
+    </tr>
+  `).join('');
+}
+
+async function runScenario() {
+  setLoading(true);
+  setAlert('');
+  document.getElementById('download').style.display = 'none';
+  document.getElementById('download').innerHTML = '';
+  document.getElementById('resultSubtitle').textContent = 'Đang chạy scenario...';
+
+  const command = document.getElementById('command').value.trim();
+  if (!command) {
+    setLoading(false);
+    setAlert('Command đang rỗng.', 'error');
+    return;
+  }
+  localStorage.setItem('excel_ai_last_command', command);
 
   const fd = new FormData();
-  fd.append('command', document.getElementById('command').value);
+  fd.append('command', command);
   fd.append('engine', document.getElementById('engine').value);
+
   const profile = document.getElementById('model_profile').value.trim();
   if (profile) fd.append('model_profile', profile);
+
   const file = document.getElementById('file').files[0];
   if (file) fd.append('file', file);
 
@@ -79,21 +805,41 @@ async function runScenario() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Request failed');
 
-    const outputs = data.formatted_outputs || {};
-    metrics.innerHTML = Object.entries(outputs).map(([k, v]) => `
-      <div class="metric"><div class="k">${k}</div><div class="v">${v}</div></div>
-    `).join('');
+    const result = data.result || {};
+    renderMetrics(data.formatted_outputs || {});
+    renderChanges(result.applied_changes || []);
+    document.getElementById('planJson').textContent = JSON.stringify(data.action_plan || {}, null, 2);
+    document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
 
+    const warningText = (result.warnings || []).join('\n');
+    setAlert(warningText, 'warn');
+
+    const download = document.getElementById('download');
     if (data.download_url) {
-      download.innerHTML = `<p><a href="${data.download_url}">Download scenario Excel file</a></p>`;
+      download.style.display = 'flex';
+      download.innerHTML = `
+        <div>
+          <strong>Scenario file generated</strong>
+          <div class="small">${escapeHtml(result.scenario_file || '')}</div>
+        </div>
+        <a href="${escapeHtml(data.download_url)}">Download Excel</a>
+      `;
     }
-    result.textContent = JSON.stringify(data, null, 2);
+
+    document.getElementById('resultSubtitle').textContent = `${result.scenario_name || 'Scenario'} · engine: ${result.engine || 'unknown'} · recalculated: ${result.recalculated ? 'yes' : 'no'}`;
   } catch (err) {
-    result.textContent = String(err);
+    setAlert(String(err), 'error');
+    document.getElementById('resultSubtitle').textContent = 'Scenario failed.';
+    document.getElementById('rawJson').textContent = String(err);
   } finally {
-    btn.disabled = false;
+    setLoading(false);
   }
 }
+
+renderExamples();
+updateCharCount();
+loadHealth();
+document.getElementById('command').addEventListener('input', updateCharCount);
 </script>
 </body>
 </html>
