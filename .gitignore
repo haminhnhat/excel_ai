@@ -16,6 +16,7 @@ models/
 outputs/
 logs/
 uploads/*
+!uploads/.gitkeep
 
 # Excel temporary files
 ~$*.xlsx
