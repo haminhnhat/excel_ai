@@ -15,7 +15,7 @@ env/
 models/
 outputs/
 logs/
-uploads/
+uploads/*
 
 # Excel temporary files
 ~$*.xlsx
