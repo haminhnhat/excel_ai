@@ -3,7 +3,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-uploads/*.xlsx
 .Python
 .venv/
 venv/
@@ -16,6 +15,7 @@ env/
 models/
 outputs/
 logs/
+uploads/
 
 # Excel temporary files
 ~$*.xlsx
