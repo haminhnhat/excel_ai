@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+python-dotenv>=1.0
+python-multipart>=0.0.9
+PyYAML>=6.0
+openpyxl>=3.1
+xlwings>=0.31
+openai>=1.40
