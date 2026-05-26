@@ -1,20 +1,26 @@
 # Python
-.venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
 
 # Environment variables
 .env
 
-# Keep local upload/model folders but ignore user files
-uploads/*
-!uploads/.gitkeep
+# Keep local Excel models out of Git
 models/*
 !models/.gitkeep
 
-# Generated outputs and logs
+uploads/*
+!uploads/.gitkeep
+
 outputs/*
 !outputs/.gitkeep
+
 logs/*
 !logs/.gitkeep
 
@@ -23,4 +29,9 @@ logs/*
 *.xlsm
 *.xls
 ~$*.xlsx
-~$*.xlsm
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

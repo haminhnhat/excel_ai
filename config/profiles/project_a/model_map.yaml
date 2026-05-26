@@ -1,0 +1,163 @@
+metadata:
+  name: project_a
+  version: review-approved-0.1
+  currency: VND
+  source_review: D:\Study\excel_ai_controller_project\excel_ai_controller_project\outputs\analysis\project_a\mapping_review.xlsx
+  note: Generated from mapping_review.xlsx. Validate before production use.
+  review_stats:
+    approved_inputs: 5
+    approved_outputs: 5
+    rejected_rows: 0
+    skipped_review_rows: 0
+settings:
+  allow_formula_overwrite: false
+  default_outputs:
+  - profit_after_tax
+  - project_npv
+  - project_irr
+  - total_investment
+  - revenue
+inputs:
+  selling_price_change:
+    sheet: Assumptions
+    cell: C6
+    type: currency
+    editable: true
+    min: -0.5
+    max: 1
+    unit: VND
+    description: 'Candidate input detected near label: Base selling price per unit
+      | VNDm / unit | Value'
+    aliases:
+    - don gia
+    - gia ban
+    - giá bán
+    - selling price
+    - đơn giá
+  loan_interest_rate:
+    sheet: Assumptions
+    cell: C8
+    type: percent
+    editable: true
+    min: 0
+    max: 0.25
+    unit: decimal
+    description: 'Candidate input detected near label: Loan interest rate | % p.a.
+      | Value'
+    aliases:
+    - chi phi von vay
+    - interest rate
+    - lai suat
+    - lai vay
+    - lãi suất
+    - lãi vay
+  vat_rate:
+    sheet: Assumptions
+    cell: C10
+    type: percent
+    editable: true
+    min: 0
+    max: 0.2
+    unit: decimal
+    description: 'Candidate input detected near label: VAT rate | %'
+    aliases:
+    - thue vat
+    - thuế vat
+    - vat
+  cit_rate:
+    sheet: Assumptions
+    cell: C11
+    type: percent
+    editable: true
+    min: 0
+    max: 0.35
+    unit: decimal
+    description: 'Candidate input detected near label: CIT rate | %'
+    aliases:
+    - cit
+    - thue tndn
+    - thuế tndn
+    - tndn
+  marketing_rate:
+    sheet: Assumptions
+    cell: C16
+    type: percent
+    editable: true
+    min: -1
+    max: 1
+    unit: decimal
+    description: 'Candidate input detected near label: Marketing cost rate | % of
+      revenue'
+    aliases:
+    - marketing
+    - truyen thong
+    - truyền thông
+outputs:
+  project_npv:
+    sheet: Summary
+    cell: B6
+    type: currency
+    unit: VND
+    description: 'Candidate output detected near label: Project NPV | Value'
+    aliases:
+    - npv
+    - npv du an
+    - npv dự án
+    - project npv
+  project_irr:
+    sheet: Summary
+    cell: B7
+    type: percent
+    unit: decimal
+    description: 'Candidate output detected near label: Project IRR | Value | =''Cash
+      Flow''!B9+''Cash Flow''!C9/(1+Assumptions!$C$9)^1+''Cash Flow''!D9/(1+Assumptions!$C$9)^2+''Cash
+      Flow''!E9/(1+Assumptions!$C$9)^3+''Cash Flow''!F9/(1+Assumptions!$C$9)^4+''Cash
+      Flow''!G9/(1+Assumptions!$C$9)^5'
+    aliases:
+    - irr
+    - irr du an
+    - irr dự án
+    - project irr
+  profit_after_tax:
+    sheet: Summary
+    cell: B10
+    type: currency
+    unit: VND
+    description: 'Candidate output detected near label: Profit After Tax | =(SUM(''Cash
+      Flow''!C9:G9)/-''Cash Flow''!B9)^(1/5)-1 | =''Cash Flow''!B13+''Cash Flow''!C13/(1+Assumptions!$C$9)^1+''Cash
+      Flow''!D13/(1+Assumptions!$C$9)^2+''Cash Flow''!E13/(1+Assumptions!$C$9)^3+''Cash
+      Flow''!F13/(1+Assumptions!$C$9)^4+''Cash Flow''!G13/(1+Assumptions!$C$9)^5 |
+      =(SUM(''Cash Flow''!C13:G13)/-''Cash Flow''!B13)^(1/5)-1'
+    aliases:
+    - lnst
+    - loi nhuan sau thue
+    - lợi nhuận sau thuế
+    - pat
+    - profit after tax
+  total_investment:
+    sheet: Summary
+    cell: B11
+    type: currency
+    unit: VND
+    description: 'Candidate output detected near label: Total Investment | =''Cash
+      Flow''!B13+''Cash Flow''!C13/(1+Assumptions!$C$9)^1+''Cash Flow''!D13/(1+Assumptions!$C$9)^2+''Cash
+      Flow''!E13/(1+Assumptions!$C$9)^3+''Cash Flow''!F13/(1+Assumptions!$C$9)^4+''Cash
+      Flow''!G13/(1+Assumptions!$C$9)^5 | =(SUM(''Cash Flow''!C13:G13)/-''Cash Flow''!B13)^(1/5)-1
+      | =''P&L''!B11'
+    aliases:
+    - tmdt
+    - tmđt
+    - tong muc dau tu
+    - total investment
+    - tổng mức đầu tư
+  revenue:
+    sheet: Summary
+    cell: B13
+    type: currency
+    unit: VND
+    description: 'Candidate output detected near label: Revenue | =''P&L''!B11 | =Costs!C8
+      | =SUM(Loan!B5:G5)'
+    aliases:
+    - doanh thu
+    - revenue
+    - sales

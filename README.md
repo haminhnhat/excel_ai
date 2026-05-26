@@ -197,3 +197,47 @@ outputs:
 - Use `xlwings` on Windows with Microsoft Excel for reliable financial-model recalculation.
 - `openpyxl` can edit cells but does not calculate formulas like Excel.
 - Always validate a new profile before running write commands.
+
+## No-code mapping review workflow
+
+For a new financial Excel file, you do not need to write `model_map.yaml` by hand. Use the review wizard:
+
+```powershell
+# 1. Generate a human-readable review workbook
+python scripts/generate_mapping_review.py --excel "models/project_a.xlsx"
+
+# 2. Open the generated review file
+# outputs/analysis/project_a/mapping_review.xlsx
+```
+
+In `mapping_review.xlsx`, open the **Review Mapping** sheet:
+
+- Set `Decision = Approve` for rows that are correct.
+- Set `Decision = Reject` for rows that are wrong.
+- If the system guessed the wrong cell, fill `Correct Sheet` and `Correct Cell/Range`.
+- Inputs should normally point to non-formula cells.
+- Outputs can point to formula cells.
+
+Then build the profile automatically:
+
+```powershell
+python scripts/build_profile_from_review.py --review "outputs/analysis/project_a/mapping_review.xlsx" --profile project_a --force
+```
+
+Validate the generated profile:
+
+```powershell
+python scripts/validate_profile.py --profile project_a --excel "models/project_a.xlsx"
+```
+
+Run a test command:
+
+```powershell
+python scripts/run_cli.py --profile project_a --excel "models/project_a.xlsx" --command "Cho tôi NPV và IRR hiện tại" --engine xlwings
+```
+
+This workflow keeps the core code unchanged. Each workbook gets its own reviewed profile under:
+
+```text
+config/profiles/<profile>/model_map.yaml
+```
