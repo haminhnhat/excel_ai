@@ -18,9 +18,16 @@ logs/
 uploads/*
 !uploads/.gitkeep
 
+# Keep models folder but ignore real Excel models
+models/*
+!models/.gitkeep
+
+
 # Excel temporary files
 ~$*.xlsx
 ~$*.xlsm
+*.xls
+~$*.xlsx
 
 # OS files
 .DS_Store
