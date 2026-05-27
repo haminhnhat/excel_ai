@@ -28,4 +28,11 @@ echo.
 start "" "http://127.0.0.1:8000"
 ".venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
+echo.
+echo The app stopped.
+echo If this happened immediately, copy or screenshot the error message above.
+echo Common causes: missing dependencies, broken Python environment, or port 8000 already in use.
+echo.
+pause
+
 endlocal
