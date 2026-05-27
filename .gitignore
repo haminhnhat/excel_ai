@@ -11,6 +11,7 @@ uploads/*
 !uploads/.gitkeep
 models/*
 !models/.gitkeep
+!models/README.md
 
 # Generated outputs and logs
 outputs/*

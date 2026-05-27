@@ -1,14 +1,94 @@
 # Excel AI Controller
 
-This project controls an Excel financial model through natural-language commands. The safe design is:
+Ứng dụng này giúp người dùng nội bộ chạy mô hình tài chính Excel bằng câu lệnh tự nhiên, ví dụ:
 
 ```text
-User command -> parser -> JSON action -> validator -> Excel controller -> recalculation -> mapped outputs
+Cho tôi NPV và IRR hiện tại
 ```
 
-The AI/parser never edits arbitrary workbook cells. It can only modify input parameters listed in a trusted `model_map.yaml`.
+```text
+Tạo scenario xấu: TMĐT tăng 15%, giá bán giảm 5%, lãi vay 8%
+```
 
-## Quick start
+Thiết kế an toàn của hệ thống:
+
+```text
+Câu lệnh người dùng
+→ bộ parse
+→ action plan dạng JSON
+→ validator kiểm tra quyền sửa ô
+→ Excel controller
+→ Excel tính lại mô hình
+→ trả kết quả và file scenario
+```
+
+AI không được tự ý sửa ô bất kỳ trong workbook. Hệ thống chỉ được sửa các ô input đã được duyệt trong `model_map.yaml`.
+
+## Dành cho người dùng không kỹ thuật
+
+Nếu bạn chỉ cần sử dụng app:
+
+1. Mở thư mục project.
+2. Double-click `Setup_First_Time.bat` trong lần đầu tiên.
+3. Sau khi setup xong, double-click `Start_App.bat`.
+4. Trình duyệt sẽ mở app tại:
+
+```text
+http://127.0.0.1:8000
+```
+
+Giữ cửa sổ màu đen đang chạy app mở trong lúc sử dụng.
+
+Hướng dẫn chi tiết hơn nằm trong:
+
+```text
+USER_GUIDE_LOW_TECH.md
+```
+
+## Luồng sử dụng chính
+
+### Chạy scenario với file đã có profile
+
+1. Mở app.
+2. Chọn tab `Run scenario`.
+3. Chọn profile phù hợp.
+4. Nhập câu lệnh.
+5. Bấm `Run scenario`.
+6. Tải file Excel kết quả ở phần download.
+
+Ví dụ câu lệnh:
+
+```text
+Cho tôi NPV và IRR hiện tại
+```
+
+```text
+Tăng lãi vay lên 8%
+```
+
+```text
+TMĐT tăng 15%, giá bán giảm 5%, lãi vay 8%
+```
+
+### Setup một file Excel mới
+
+1. Mở app.
+2. Chọn tab `Setup new Excel file`.
+3. Upload workbook Excel `.xlsx` hoặc `.xlsm`.
+4. Nhập tên profile ngắn, ví dụ `project_a`.
+5. Bấm `Analyze workbook`.
+6. Review các ô hệ thống đề xuất.
+7. Chọn `Approve`, `Review`, hoặc `Reject`.
+8. Nếu hệ thống đoán sai ô, nhập lại `Correct Sheet` và `Correct Cell`.
+9. Bấm `Validate selection`.
+10. Nếu validation đạt, bấm `Create profile`.
+11. Quay lại tab `Run scenario` để chạy mô hình.
+
+Quy tắc quan trọng: ô input không nên là ô công thức. Ô output có thể là ô công thức vì hệ thống chỉ đọc kết quả.
+
+## Setup cho kỹ thuật/admin
+
+Nếu cần setup thủ công:
 
 ```powershell
 python -m venv .venv
@@ -17,227 +97,90 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Put the real Excel workbook in `models/`, for example:
-
-```text
-models/2025.10.26_NOXH_Yen_My_BKD.xlsx
-```
-
-Run the web app:
+Chạy app:
 
 ```powershell
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open:
+Mở:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-## CLI examples
+## Cấu hình `.env`
 
-```powershell
-python scripts/run_cli.py --profile yen_my --excel "models/2025.10.26_NOXH_Yen_My_BKD.xlsx" --command "Tăng lãi vay lên 8%" --engine xlwings
-```
-
-```powershell
-python scripts/run_cli.py --profile yen_my --excel "models/2025.10.26_NOXH_Yen_My_BKD.xlsx" --command "Tạo scenario xấu: TMĐT tăng 15%, giá bán giảm 5%, lãi vay 8%" --engine xlwings
-```
-
-## Model profiles
-
-Different financial Excel workbooks need different mappings. Do not hardcode new workbook cells in the parser.
-
-Use profiles:
-
-```text
-config/profiles/<profile_name>/model_map.yaml
-```
-
-Example:
-
-```text
-config/profiles/yen_my/model_map.yaml
-config/profiles/project_a/model_map.yaml
-```
-
-Set profile in `.env`:
+Các cấu hình quan trọng:
 
 ```env
+AI_PROVIDER=mock
+EXCEL_ENGINE=xlwings
+MODEL_PATH=models/ten_file_excel.xlsx
 MODEL_PROFILE=yen_my
+OUTPUT_DIR=outputs
+AUDIT_LOG_PATH=logs/audit_log.csv
 ```
 
-Or pass it in CLI:
+Ghi chú:
 
-```powershell
-python scripts/run_cli.py --profile project_a --excel "models/project_a.xlsx" --command "Cho tôi NPV và IRR hiện tại" --engine xlwings
-```
+- `AI_PROVIDER=mock`: dùng parser nội bộ, không cần API key.
+- `AI_PROVIDER=openai`: dùng OpenAI làm fallback để hiểu câu lệnh linh hoạt hơn.
+- `EXCEL_ENGINE=xlwings`: khuyến nghị cho Windows có Microsoft Excel.
+- `openpyxl` có thể sửa ô nhưng không tính lại công thức Excel phức tạp đáng tin cậy.
 
-## Onboard a new financial Excel workbook
+## Profile mô hình
 
-1. Put the workbook in `models/`, for example:
+Mỗi workbook tài chính nên có một profile riêng:
 
 ```text
-models/project_a.xlsx
+config/profiles/<ten_profile>/model_map.yaml
 ```
 
-2. Analyze the workbook:
+Profile cho biết:
+
+- Ô nào là input được phép sửa.
+- Ô nào là output để đọc kết quả.
+- Min/max, kiểu dữ liệu, đơn vị và alias cho từng parameter.
+
+Không hardcode ô mới trong parser. Khi có workbook mới, tạo profile mới.
+
+## Workflow review mapping không cần sửa YAML
+
+Nếu không dùng web wizard, admin có thể tạo file review Excel:
 
 ```powershell
-python scripts/analyze_workbook.py --excel "models/project_a.xlsx"
-```
-
-This creates:
-
-```text
-outputs/analysis/project_a/
-  workbook_structure.json
-  candidate_inputs.csv
-  candidate_outputs.csv
-  formula_cells.csv
-  formula_errors.csv
-  draft_model_map.yaml
-  analysis_summary.json
-```
-
-3. Create a profile from the draft:
-
-```powershell
-python scripts/create_profile.py --profile project_a --draft-map "outputs/analysis/project_a/draft_model_map.yaml"
-```
-
-4. Manually edit:
-
-```text
-config/profiles/project_a/model_map.yaml
-```
-
-Verify every input and output cell. Do not map inputs to formula cells unless you intentionally set `allow_formula_overwrite: true`.
-
-5. Validate the profile:
-
-```powershell
-python scripts/validate_profile.py --profile project_a --excel "models/project_a.xlsx"
-```
-
-6. Test read-only command first:
-
-```powershell
-python scripts/run_cli.py --profile project_a --excel "models/project_a.xlsx" --command "Cho tôi NPV và IRR hiện tại" --engine xlwings
-```
-
-7. Then test one write command at a time.
-
-## Mapping format
-
-Single input cell:
-
-```yaml
-inputs:
-  loan_interest_rate:
-    sheet: "Assumptions"
-    cell: "C12"
-    type: "percent"
-    editable: true
-    min: 0.0
-    max: 0.25
-    unit: "decimal"
-    aliases:
-      - "lãi vay"
-      - "interest rate"
-```
-
-Multiple hardcoded cells for one assumption:
-
-```yaml
-inputs:
-  loan_interest_rate:
-    sheet: "Loan"
-    cells: ["E7", "F7", "G7", "H7"]
-    type: "percent"
-    editable: true
-    min: 0.0
-    max: 0.25
-    unit: "decimal"
-```
-
-Range:
-
-```yaml
-inputs:
-  loan_interest_rate:
-    sheet: "Loan"
-    range: "E7:AS7"
-    type: "percent"
-    editable: true
-    min: 0.0
-    max: 0.25
-    unit: "decimal"
-```
-
-Outputs:
-
-```yaml
-outputs:
-  project_npv:
-    sheet: "Summary"
-    cell: "D6"
-    type: "currency"
-    unit: "VND"
-    aliases:
-      - "npv dự án"
-      - "project npv"
-```
-
-## Important safety rules
-
-- Keep real Excel models out of GitHub.
-- Keep `.env` out of GitHub.
-- Use `xlwings` on Windows with Microsoft Excel for reliable financial-model recalculation.
-- `openpyxl` can edit cells but does not calculate formulas like Excel.
-- Always validate a new profile before running write commands.
-
-## No-code mapping review workflow
-
-For a new financial Excel file, you do not need to write `model_map.yaml` by hand. Use the review wizard:
-
-```powershell
-# 1. Generate a human-readable review workbook
 python scripts/generate_mapping_review.py --excel "models/project_a.xlsx"
-
-# 2. Open the generated review file
-# outputs/analysis/project_a/mapping_review.xlsx
 ```
 
-In `mapping_review.xlsx`, open the **Review Mapping** sheet:
+Mở file:
 
-- Set `Decision = Approve` for rows that are correct.
-- Set `Decision = Reject` for rows that are wrong.
-- If the system guessed the wrong cell, fill `Correct Sheet` and `Correct Cell/Range`.
-- Inputs should normally point to non-formula cells.
-- Outputs can point to formula cells.
+```text
+outputs/analysis/project_a/mapping_review.xlsx
+```
 
-Then build the profile automatically:
+Trong sheet `Review Mapping`:
+
+- `Approve`: dùng mapping này.
+- `Reject`: bỏ mapping này.
+- Nếu sai ô, điền `Correct Sheet` và `Correct Cell/Range`.
+
+Tạo profile từ file review:
 
 ```powershell
 python scripts/build_profile_from_review.py --review "outputs/analysis/project_a/mapping_review.xlsx" --profile project_a --force
 ```
 
-Validate the generated profile:
+Validate profile:
 
 ```powershell
 python scripts/validate_profile.py --profile project_a --excel "models/project_a.xlsx"
 ```
 
-Run a test command:
+## Quy tắc an toàn
 
-```powershell
-python scripts/run_cli.py --profile project_a --excel "models/project_a.xlsx" --command "Cho tôi NPV và IRR hiện tại" --engine xlwings
-```
-
-This workflow keeps the core code unchanged. Each workbook gets its own reviewed profile under:
-
-```text
-config/profiles/<profile>/model_map.yaml
-```
+- Không commit file Excel thật lên Git.
+- Không commit `.env`.
+- Luôn validate profile mới trước khi chạy scenario ghi dữ liệu.
+- Chỉ map input vào ô nhập liệu thật, không map vào ô công thức.
+- Với mô hình tài chính thật, ưu tiên `xlwings` và Microsoft Excel để tính lại kết quả.
