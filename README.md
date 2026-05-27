@@ -45,6 +45,8 @@ Hướng dẫn chi tiết hơn nằm trong:
 USER_GUIDE_LOW_TECH.md
 ```
 
+Nếu admin/IT đã chuẩn bị sẵn offline package cache trong `vendor/wheels`, bước setup sẽ không cần tải thư viện từ internet.
+
 ## Luồng sử dụng chính
 
 ### Chạy scenario với file đã có profile
@@ -108,6 +110,37 @@ Mở:
 ```text
 http://127.0.0.1:8000
 ```
+
+## Chuẩn bị bản offline cho nội bộ
+
+Khuyến nghị cho công ty: admin/IT chuẩn bị package một lần trên máy có internet, sau đó copy nguyên folder project cho user.
+
+Trên máy admin có internet:
+
+```text
+Build_Offline_Package.bat
+```
+
+Script này tải toàn bộ dependency trong `requirements.txt` vào:
+
+```text
+vendor/wheels/
+```
+
+Sau đó copy cả thư mục project sang máy user. Trên máy user:
+
+```text
+Setup_First_Time.bat
+Start_App.bat
+```
+
+Khi `vendor/wheels` có package, `Setup_First_Time.bat` sẽ ưu tiên cài offline bằng:
+
+```text
+pip install --no-index --find-links vendor/wheels -r requirements.txt
+```
+
+Như vậy user không cần Git Bash, không cần PowerShell, và thường không cần internet để cài dependencies.
 
 ## Cấu hình `.env`
 

@@ -18,6 +18,8 @@ https://www.python.org/downloads/
 
 Khi cài Python, nhớ chọn `Add python.exe to PATH`.
 
+Nếu admin/IT đã chuẩn bị sẵn bản offline, user không cần tự tải thư viện Python từ internet. Chỉ cần chạy file `.bat` theo hướng dẫn bên dưới.
+
 ## 2. Mở app lần đầu
 
 1. Mở thư mục app.
@@ -151,3 +153,27 @@ Nếu không hiểu lỗi:
 
 - Chụp màn hình lỗi.
 - Gửi kèm file Excel, tên profile, và câu lệnh đã nhập cho admin/kỹ thuật.
+
+## 8. Ghi chú cho admin/IT
+
+Để giảm lỗi khi setup trên nhiều máy, admin/IT nên chuẩn bị bản offline trước.
+
+Trên một máy có internet, chạy:
+
+```text
+Build_Offline_Package.bat
+```
+
+Sau khi chạy xong, thư mục sau sẽ có các package cần thiết:
+
+```text
+vendor/wheels/
+```
+
+Copy toàn bộ thư mục project sang máy user. User chỉ cần chạy:
+
+```text
+Setup_First_Time.bat
+```
+
+Nếu setup thấy package trong `vendor/wheels`, app sẽ cài offline và không cần tải package từ internet.
