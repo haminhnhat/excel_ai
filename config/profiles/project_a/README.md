@@ -1,9 +1,9 @@
 # Profile: project_a
 
-Generated from `D:\Study\excel_ai_controller_project\excel_ai_controller_project\outputs\analysis\project_a\mapping_review.xlsx`.
+Sample profile for the synthetic `project_a.xlsx` test workbook.
 
-Run validation before using it:
+Validate with:
 
 ```powershell
-python scripts/validate_profile.py --profile project_a --excel "models/your_model.xlsx"
+python scripts/validate_profile.py --profile project_a --excel "models/project_a.xlsx"
 ```

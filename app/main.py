@@ -3,18 +3,25 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from .ai_parser import parse_user_command
 from .config_loader import list_profiles, load_model_map_for_profile, resolve_model_map_path
 from .excel_controller import ExcelController
-from .utils import format_value
+from .utils import format_value, safe_filename
 from .validator import ValidationError, validate_action_plan
+from .onboarding import (
+    build_model_map_from_candidates,
+    save_profile_yaml,
+    scan_workbook_for_mapping,
+    validate_model_map_against_workbook,
+)
 
 load_dotenv()
 
@@ -46,6 +53,52 @@ def _resolve_model_path() -> Path:
     return model_path
 
 
+class OnboardingCandidate(BaseModel):
+    decision: str = "Review"
+    role: str
+    parameter_key: str
+    friendly_name: str | None = None
+    sheet: str
+    cell: str
+    current_value: str | None = None
+    formula: bool | None = None
+    type: str = "number"
+    unit: str | None = None
+    min: float | None = None
+    max: float | None = None
+    editable: bool | None = True
+    confidence: str | None = None
+    nearby_label: str | None = None
+    description: str | None = None
+    aliases: list[str] | str | None = Field(default_factory=list)
+    correct_sheet: str | None = None
+    correct_cell: str | None = None
+    target_mode: str | None = "cell"
+    notes: str | None = None
+
+
+class CreateProfileRequest(BaseModel):
+    profile_name: str
+    excel_path: str
+    candidates: list[OnboardingCandidate]
+    currency: str = "VND"
+    overwrite: bool = True
+
+
+def _resolve_any_path(path_value: str | Path) -> Path:
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = BASE_DIR / path
+    return path
+
+
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(BASE_DIR)).replace("\\", "/")
+    except ValueError:
+        return str(path)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     index_path = WEB_DIR / "index.html"
@@ -69,12 +122,93 @@ def health() -> dict:
     }
 
 
+
+
+@app.get("/api/profiles")
+def api_profiles() -> dict:
+    profiles = list_profiles(BASE_DIR)
+    return {"ok": True, "profiles": profiles, "default_profile": os.getenv("MODEL_PROFILE")}
+
+
+@app.post("/api/onboarding/analyze")
+async def onboarding_analyze(
+    file: UploadFile = File(...),
+    suggested_profile: Optional[str] = Form(default=None),
+) -> dict:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No Excel file uploaded.")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in {".xlsx", ".xlsm"}:
+        raise HTTPException(status_code=400, detail="Please upload an .xlsx or .xlsm file.")
+
+    stem = safe_filename(suggested_profile or Path(file.filename).stem)
+    target_dir = UPLOAD_DIR / "onboarding" / stem
+    target_dir.mkdir(parents=True, exist_ok=True)
+    excel_path = target_dir / f"{stem}{suffix}"
+    with excel_path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    try:
+        analysis = scan_workbook_for_mapping(excel_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not analyze workbook: {e}")
+
+    analysis["excel_path"] = _rel(excel_path)
+    analysis["suggested_profile"] = safe_filename(suggested_profile or analysis.get("suggested_profile") or stem)
+    analysis["available_profiles"] = list_profiles(BASE_DIR)
+    return {"ok": True, **analysis}
+
+
+@app.post("/api/onboarding/validate-selection")
+def onboarding_validate_selection(payload: CreateProfileRequest) -> dict:
+    excel_path = _resolve_any_path(payload.excel_path)
+    if not excel_path.exists():
+        raise HTTPException(status_code=400, detail=f"Excel file not found: {excel_path}")
+    candidates = [item.model_dump() for item in payload.candidates]
+    try:
+        model_map = build_model_map_from_candidates(payload.profile_name, candidates, currency=payload.currency)
+        validation = validate_model_map_against_workbook(model_map, excel_path)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return {"ok": validation["ok"], "validation": validation, "model_map_preview": model_map}
+
+
+@app.post("/api/onboarding/create-profile")
+def onboarding_create_profile(payload: CreateProfileRequest) -> dict:
+    excel_path = _resolve_any_path(payload.excel_path)
+    if not excel_path.exists():
+        raise HTTPException(status_code=400, detail=f"Excel file not found: {excel_path}")
+    candidates = [item.model_dump() for item in payload.candidates]
+    try:
+        profile = safe_filename(payload.profile_name)
+        model_map = build_model_map_from_candidates(profile, candidates, currency=payload.currency)
+        validation = validate_model_map_against_workbook(model_map, excel_path)
+        if not validation["ok"]:
+            return {
+                "ok": False,
+                "message": "Profile was not saved because validation failed.",
+                "validation": validation,
+                "model_map_preview": model_map,
+            }
+        out_path = save_profile_yaml(BASE_DIR, profile, model_map, overwrite=payload.overwrite)
+        return {
+            "ok": True,
+            "profile": profile,
+            "model_map_path": _rel(out_path),
+            "excel_path": _rel(excel_path),
+            "validation": validation,
+            "available_profiles": list_profiles(BASE_DIR),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
 @app.post("/api/scenario")
 async def run_scenario(
     command: str = Form(...),
     file: Optional[UploadFile] = File(default=None),
     engine: Optional[str] = Form(default=None),
     model_profile: Optional[str] = Form(default=None),
+    excel_path: Optional[str] = Form(default=None),
 ) -> dict:
     try:
         model_map, model_map_path = load_model_map_for_profile(profile=model_profile)
@@ -84,6 +218,8 @@ async def run_scenario(
             source_path = UPLOAD_DIR / safe_name
             with source_path.open("wb") as f:
                 shutil.copyfileobj(file.file, f)
+        elif excel_path:
+            source_path = _resolve_any_path(excel_path)
         else:
             source_path = _resolve_model_path()
 

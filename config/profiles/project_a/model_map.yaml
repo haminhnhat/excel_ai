@@ -1,163 +1,186 @@
 metadata:
-  name: project_a
-  version: review-approved-0.1
+  name: Project A sample financial model
+  version: '0.1'
   currency: VND
-  source_review: D:\Study\excel_ai_controller_project\excel_ai_controller_project\outputs\analysis\project_a\mapping_review.xlsx
-  note: Generated from mapping_review.xlsx. Validate before production use.
-  review_stats:
-    approved_inputs: 5
-    approved_outputs: 5
-    rejected_rows: 0
-    skipped_review_rows: 0
+  note: Synthetic sample profile for onboarding tests.
 settings:
   allow_formula_overwrite: false
   default_outputs:
   - profit_after_tax
   - project_npv
   - project_irr
+  - equity_npv
+  - equity_irr
   - total_investment
-  - revenue
 inputs:
-  selling_price_change:
-    sheet: Assumptions
-    cell: C6
-    type: currency
-    editable: true
-    min: -0.5
-    max: 1
-    unit: VND
-    description: 'Candidate input detected near label: Base selling price per unit
-      | VNDm / unit | Value'
-    aliases:
-    - don gia
-    - gia ban
-    - giá bán
-    - selling price
-    - đơn giá
   loan_interest_rate:
     sheet: Assumptions
     cell: C8
     type: percent
     editable: true
-    min: 0
+    min: 0.0
     max: 0.25
     unit: decimal
-    description: 'Candidate input detected near label: Loan interest rate | % p.a.
-      | Value'
+    description: Loan interest rate. 0.08 = 8% per annum.
     aliases:
-    - chi phi von vay
-    - interest rate
-    - lai suat
+    - lãi vay
     - lai vay
     - lãi suất
-    - lãi vay
+    - lãi ngân hàng
+    - interest rate
+    - chi phí vốn vay
   vat_rate:
     sheet: Assumptions
     cell: C10
     type: percent
     editable: true
-    min: 0
+    min: 0.0
     max: 0.2
     unit: decimal
-    description: 'Candidate input detected near label: VAT rate | %'
+    description: VAT rate.
     aliases:
-    - thue vat
-    - thuế vat
     - vat
+    - thuế vat
+    - thue vat
   cit_rate:
     sheet: Assumptions
     cell: C11
     type: percent
     editable: true
-    min: 0
+    min: 0.0
     max: 0.35
     unit: decimal
-    description: 'Candidate input detected near label: CIT rate | %'
+    description: Corporate income tax rate.
     aliases:
-    - cit
-    - thue tndn
-    - thuế tndn
     - tndn
+    - thuế tndn
+    - cit
+    - corporate income tax
+  selling_price_change:
+    sheet: Assumptions
+    cell: C12
+    type: percent
+    editable: true
+    min: -0.5
+    max: 1.0
+    unit: decimal
+    description: Selling price scenario adjustment.
+    aliases:
+    - giá bán
+    - gia ban
+    - đơn giá
+    - selling price
+    - doanh thu
+    - revenue
+  investment_cost_change:
+    sheet: Assumptions
+    cell: C13
+    type: percent
+    editable: true
+    min: -0.3
+    max: 1.0
+    unit: decimal
+    description: Investment cost scenario adjustment.
+    aliases:
+    - tổng mức đầu tư
+    - tong muc dau tu
+    - tmđt
+    - tmdt
+    - chi phí đầu tư
+    - investment cost
+    - capex
+  sales_volume_change:
+    sheet: Assumptions
+    cell: C14
+    type: percent
+    editable: true
+    min: -0.5
+    max: 1.0
+    unit: decimal
+    description: Sales volume scenario adjustment.
+    aliases:
+    - sản lượng bán
+    - so can
+    - số căn
+    - sales volume
+    - units sold
+  admin_cost_rate:
+    sheet: Assumptions
+    cell: C15
+    type: percent
+    editable: true
+    min: 0.0
+    max: 0.2
+    unit: decimal
+    description: Admin cost as % of revenue.
+    aliases:
+    - chi phí quản lý
+    - admin cost
+    - g&a
   marketing_rate:
     sheet: Assumptions
     cell: C16
     type: percent
     editable: true
-    min: -1
-    max: 1
+    min: 0.0
+    max: 0.2
     unit: decimal
-    description: 'Candidate input detected near label: Marketing cost rate | % of
-      revenue'
+    description: Marketing cost as % of revenue.
     aliases:
     - marketing
-    - truyen thong
+    - chi phí marketing
     - truyền thông
+  debt_financing_ratio:
+    sheet: Assumptions
+    cell: C17
+    type: percent
+    editable: true
+    min: 0.0
+    max: 0.9
+    unit: decimal
+    description: Debt financing ratio.
+    aliases:
+    - tỷ lệ vay
+    - debt ratio
+    - vốn vay
 outputs:
   project_npv:
     sheet: Summary
     cell: B6
     type: currency
-    unit: VND
-    description: 'Candidate output detected near label: Project NPV | Value'
-    aliases:
-    - npv
-    - npv du an
-    - npv dự án
-    - project npv
+    description: Project NPV.
   project_irr:
     sheet: Summary
     cell: B7
     type: percent
-    unit: decimal
-    description: 'Candidate output detected near label: Project IRR | Value | =''Cash
-      Flow''!B9+''Cash Flow''!C9/(1+Assumptions!$C$9)^1+''Cash Flow''!D9/(1+Assumptions!$C$9)^2+''Cash
-      Flow''!E9/(1+Assumptions!$C$9)^3+''Cash Flow''!F9/(1+Assumptions!$C$9)^4+''Cash
-      Flow''!G9/(1+Assumptions!$C$9)^5'
-    aliases:
-    - irr
-    - irr du an
-    - irr dự án
-    - project irr
+    description: Project IRR approximation.
+  equity_npv:
+    sheet: Summary
+    cell: B8
+    type: currency
+    description: Equity NPV.
+  equity_irr:
+    sheet: Summary
+    cell: B9
+    type: percent
+    description: Equity IRR approximation.
   profit_after_tax:
     sheet: Summary
     cell: B10
     type: currency
-    unit: VND
-    description: 'Candidate output detected near label: Profit After Tax | =(SUM(''Cash
-      Flow''!C9:G9)/-''Cash Flow''!B9)^(1/5)-1 | =''Cash Flow''!B13+''Cash Flow''!C13/(1+Assumptions!$C$9)^1+''Cash
-      Flow''!D13/(1+Assumptions!$C$9)^2+''Cash Flow''!E13/(1+Assumptions!$C$9)^3+''Cash
-      Flow''!F13/(1+Assumptions!$C$9)^4+''Cash Flow''!G13/(1+Assumptions!$C$9)^5 |
-      =(SUM(''Cash Flow''!C13:G13)/-''Cash Flow''!B13)^(1/5)-1'
-    aliases:
-    - lnst
-    - loi nhuan sau thue
-    - lợi nhuận sau thuế
-    - pat
-    - profit after tax
+    description: Total profit after tax.
   total_investment:
     sheet: Summary
     cell: B11
     type: currency
-    unit: VND
-    description: 'Candidate output detected near label: Total Investment | =''Cash
-      Flow''!B13+''Cash Flow''!C13/(1+Assumptions!$C$9)^1+''Cash Flow''!D13/(1+Assumptions!$C$9)^2+''Cash
-      Flow''!E13/(1+Assumptions!$C$9)^3+''Cash Flow''!F13/(1+Assumptions!$C$9)^4+''Cash
-      Flow''!G13/(1+Assumptions!$C$9)^5 | =(SUM(''Cash Flow''!C13:G13)/-''Cash Flow''!B13)^(1/5)-1
-      | =''P&L''!B11'
-    aliases:
-    - tmdt
-    - tmđt
-    - tong muc dau tu
-    - total investment
-    - tổng mức đầu tư
-  revenue:
+    description: Adjusted total investment.
+  bank_loan:
+    sheet: Summary
+    cell: B12
+    type: currency
+    description: Total debt draw.
+  total_revenue:
     sheet: Summary
     cell: B13
     type: currency
-    unit: VND
-    description: 'Candidate output detected near label: Revenue | =''P&L''!B11 | =Costs!C8
-      | =SUM(Loan!B5:G5)'
-    aliases:
-    - doanh thu
-    - revenue
-    - sales
+    description: Total revenue before VAT.

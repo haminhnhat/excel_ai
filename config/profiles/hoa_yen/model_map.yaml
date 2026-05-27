@@ -1,0 +1,196 @@
+metadata:
+  name: hoa_yen
+  version: ui-onboarded-0.2
+  currency: VND
+  note: Generated from web onboarding wizard. Validate before production use.
+  review_stats:
+    approved_rows: 13
+    skipped_rows: 2
+settings:
+  allow_formula_overwrite: false
+  default_outputs:
+  - profit_after_tax
+  - project_npv
+  - project_irr
+  - bank_loan
+  - total_revenue
+inputs:
+  admin_cost_rate:
+    sheet: 1. Leadsheet
+    cell: A35
+    type: currency
+    editable: true
+    unit: VND
+    description: 'Candidate input found near label: Chi phí quản lý dự án + Tư vấn
+      + chi phí khác'
+    aliases:
+    - admin cost
+    - chi phi quan ly
+    - chi phí quản lý
+    - g&a
+    - management cost
+  cit_rate:
+    sheet: 1. Leadsheet
+    cell: D114
+    type: percent
+    editable: true
+    min: 0.0
+    max: 0.35
+    unit: decimal
+    description: 'Candidate input found near label: Thuế TNDN'
+    aliases:
+    - cit
+    - corporate income tax
+    - thue tndn
+    - thuế tndn
+    - tndn
+  investment_cost_change:
+    sheet: 1. Leadsheet
+    cell: C47
+    type: percent
+    editable: true
+    min: -0.3
+    max: 1.0
+    unit: decimal
+    description: 'Candidate input found near label: Tỷ lệ thay đổi TMĐT'
+    aliases:
+    - capex
+    - chi phi dau tu
+    - chi phí đầu tư
+    - investment cost
+    - tmdt
+    - tmđt
+    - tong muc dau tu
+    - total investment
+    - tổng mức đầu tư
+  loan_interest_rate:
+    sheet: 1. Leadsheet
+    cell: A46
+    type: percent
+    editable: true
+    min: 0.0
+    max: 0.25
+    unit: decimal
+    description: 'Candidate input found near label: Lãi vay trong TGXD'
+    aliases:
+    - chi phí vốn vay
+    - interest rate
+    - lai suat
+    - lai vay
+    - loan interest
+    - lãi ngân hàng
+    - lãi suất
+    - lãi vay
+  marketing_rate:
+    sheet: KQKD-Form
+    cell: E88
+    type: number
+    editable: true
+    description: 'Candidate input found near label: - Truyền thông | =''2. KHKD''!I69'
+    aliases:
+    - chi phi marketing
+    - chi phí marketing
+    - marketing
+    - truyen thong
+    - truyền thông
+  selling_cost_rate:
+    sheet: KQKD-Form
+    cell: A81
+    type: currency
+    editable: true
+    unit: VND
+    description: 'Candidate input found near label: 5.4 | Chi phí bán hàng'
+    aliases:
+    - brokerage
+    - chi phi ban hang
+    - chi phí bán hàng
+    - hoa hong
+    - hoa hồng
+    - moi gioi
+    - môi giới
+    - selling cost
+  selling_price_change:
+    sheet: GPMB
+    cell: E5
+    type: number
+    editable: true
+    min: -0.5
+    max: 1.0
+    description: 'Candidate input found near label: =L5+L6 | Đơn giá  (1000đ) | =E5*D5'
+    aliases:
+    - doanh thu
+    - don gia
+    - gia ban
+    - giá bán
+    - price adjustment
+    - revenue
+    - selling price
+    - đơn giá
+  vat_rate:
+    sheet: Tổng hợp
+    cell: B21
+    type: percent
+    editable: true
+    min: 0.0
+    max: 0.2
+    unit: decimal
+    description: 'Candidate input found near label: TMĐT (bao gồm VAT) | Chi phí GPMB'
+    aliases:
+    - thue vat
+    - thuế vat
+    - vat
+outputs:
+  bank_loan:
+    sheet: 1. Leadsheet
+    cell: D129
+    type: number
+    description: 'Candidate output found near label: Vốn vay ngân hàng | =''4. Cơ
+      cấu vốn''!C50'
+    aliases:
+    - bank loan
+    - loan amount
+    - vay ngan hang
+    - vay ngân hàng
+  profit_after_tax:
+    sheet: Tổng hợp
+    cell: D44
+    type: number
+    description: 'Candidate output found near label: Lợi nhuận sau thuế | =''2. KHKD''!E78
+      | =D44/D32'
+    aliases:
+    - lnst
+    - loi nhuan sau thue
+    - lợi nhuận sau thuế
+    - profit after tax
+  project_irr:
+    sheet: 3. Dòng tiền
+    cell: C52
+    type: percent
+    unit: decimal
+    description: 'Candidate output found near label: Thời gian hoàn vốn | =IRR(H29:BE29)'
+    aliases:
+    - irr
+    - irr du an
+    - irr dự án
+    - project irr
+  project_npv:
+    sheet: 3. Dòng tiền
+    cell: C50
+    type: currency
+    unit: VND
+    description: 'Candidate output found near label: NPV'
+    aliases:
+    - npv
+    - npv du an
+    - npv dự án
+    - project npv
+  total_revenue:
+    sheet: Tổng hợp
+    cell: D32
+    type: currency
+    unit: VND
+    description: 'Candidate output found near label: Tổng doanh thu | =SUM(D21:D28)'
+    aliases:
+    - tong doanh thu
+    - total revenue
+    - tổng doanh thu
