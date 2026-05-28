@@ -32,3 +32,9 @@ uploads/onboarding/*
 *.xls
 ~$*.xlsx
 ~$*.xlsm
+
+.codegraph/*
+
+.cursor/*
+
+config/*

@@ -11,6 +11,7 @@ import warnings
 import yaml
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter, range_boundaries
+from openpyxl.utils.cell import coordinate_to_tuple
 
 from .utils import normalize_text, safe_filename
 
@@ -58,7 +59,7 @@ OUTPUT_KEYWORDS: dict[str, list[str]] = {
     "roi": ["roi"],
     "profit_after_tax": ["lợi nhuận sau thuế", "loi nhuan sau thue", "profit after tax", "lnst"],
     "total_investment": ["tổng mức đầu tư", "tong muc dau tu", "tmđt", "tmdt", "total investment"],
-    "bank_loan": ["vay ngân hàng", "vay ngan hang", "bank loan", "loan amount"],
+    "bank_loan": ["nguồn vốn vay", "nguon von vay", "vốn vay", "von vay", "vay ngân hàng", "vay ngan hang", "bank loan", "loan amount"],
     "total_revenue": ["tổng doanh thu", "tong doanh thu", "total revenue"],
     "revenue": ["doanh thu", "revenue"],
 }
@@ -88,11 +89,71 @@ def matches(text: Any, phrases: list[str]) -> bool:
     return any(normalize_text(p) in norm for p in phrases)
 
 
+def keyword_match_score(text: Any, phrases: list[str]) -> int:
+    if not text:
+        return 0
+    norm = normalize_text(str(text))
+    best = 0
+    for phrase in phrases:
+        phrase_norm = normalize_text(phrase)
+        if not phrase_norm or phrase_norm not in norm:
+            continue
+        score = 10 + min(len(phrase_norm), 50)
+        if norm == phrase_norm:
+            score += 50
+        elif norm.startswith(phrase_norm) or norm.endswith(phrase_norm):
+            score += 15
+        best = max(best, score)
+    return best
+
+
 def guess_param(label: str, keyword_map: dict[str, list[str]]) -> str:
-    for key, phrases in keyword_map.items():
-        if matches(label, phrases):
-            return key
+    scored = [
+        (keyword_match_score(label, phrases), key)
+        for key, phrases in keyword_map.items()
+    ]
+    scored.sort(reverse=True)
+    return scored[0][1] if scored and scored[0][0] > 0 else ""
+
+
+def guess_output_param(label: str) -> str:
+    norm = normalize_text(label)
+    if "irr" in norm:
+        if any(token in norm for token in ["equity", "investor", "chu dau tu", "csh", "von chu"]):
+            return "equity_irr"
+        return "project_irr"
+    if "npv" in norm:
+        if any(token in norm for token in ["equity", "investor", "chu dau tu", "csh", "von chu"]):
+            return "equity_npv"
+        return "project_npv"
+    return guess_param(label, OUTPUT_KEYWORDS)
+
+
+def nearby_text_window(ws: Any, row: int, col: int, row_radius: int = 4, col_radius: int = 4) -> str:
+    parts: list[str] = []
+    for r in range(max(1, row - row_radius), min(ws.max_row, row + row_radius) + 1):
+        for c in range(max(1, col - col_radius), min(ws.max_column, col + col_radius) + 1):
+            v = ws.cell(row=r, column=c).value
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+    return " | ".join(dict.fromkeys(parts))
+
+
+def guess_contextual_output_param(ws: Any, row: int, col: int, label: str) -> str:
+    norm = normalize_text(label)
+    if "tong cong" not in norm and "total" not in norm:
+        return ""
+    context = normalize_text(nearby_text_window(ws, row, col))
+    if any(token in context for token in ["tmdt", "tmđt", "tong muc dau tu", "total investment", "nguon von"]):
+        return "total_investment"
+    if any(token in context for token in ["doanh thu", "revenue"]):
+        return "total_revenue"
     return ""
+
+
+def param_label_score(param: str, label: str, role: str) -> int:
+    keyword_map = INPUT_KEYWORDS if role == "input" else OUTPUT_KEYWORDS
+    return keyword_match_score(label, keyword_map.get(param, []))
 
 
 def nearby_label(ws: Any, row: int, col: int) -> str:
@@ -127,6 +188,8 @@ def type_guess(value: Any, label: str, param: str = "") -> str:
     norm = normalize_text(str(label or ""))
     if param.endswith("_irr") or param == "roi" or "irr" in norm or "roi" in norm:
         return "percent"
+    if param in {"project_npv", "equity_npv", "profit_after_tax", "total_investment", "bank_loan", "total_revenue", "revenue"}:
+        return "currency"
     if "vat" in norm or "tndn" in norm or "lai" in norm or "rate" in norm or "ty le" in norm:
         return "percent"
     if isinstance(value, (int, float)):
@@ -166,6 +229,8 @@ def infer_unit(t: str) -> str:
 def confidence_for(role: str, param: str, label: str, formula: bool) -> str:
     if not param:
         return "low"
+    if param_label_score(param, label, role) >= 45:
+        return "high" if role == "output" or not formula else "low"
     if role == "input":
         return "high" if not formula else "low"
     if role == "output":
@@ -176,6 +241,99 @@ def confidence_for(role: str, param: str, label: str, formula: bool) -> str:
 def aliases_for(param: str, role: str) -> list[str]:
     source = INPUT_KEYWORDS if role == "input" else OUTPUT_KEYWORDS
     return source.get(param, [])
+
+
+def normalized_sheet_title(sheet: str) -> str:
+    return normalize_text(sheet).replace("&", " ")
+
+
+def output_sheet_score(param: str, sheet: str) -> int:
+    norm = normalized_sheet_title(sheet)
+    summary_tokens = ["summary", "tong hop", "ket qua", "dashboard"]
+    cashflow_tokens = ["pl cf", "p l cf", "cashflow", "cash flow", "cf"]
+    score = 0
+    if any(token in norm for token in summary_tokens):
+        score += 24
+    if param in {"project_npv", "project_irr", "equity_npv", "equity_irr", "revenue"}:
+        if any(token in norm for token in cashflow_tokens):
+            score += 18
+    if param in {"total_investment", "bank_loan", "profit_after_tax"} and any(token in norm for token in summary_tokens):
+        score += 16
+    return score
+
+
+def output_context_score(param: str, label: str) -> int:
+    norm = normalize_text(label)
+    score = 0
+    if "tong cong" in norm or "total" in norm:
+        if param in {"total_investment", "total_revenue", "revenue", "bank_loan"}:
+            score += 22
+    if "truoc vat" in norm or "before vat" in norm:
+        if param in {"revenue", "total_revenue"}:
+            score += 16
+    if "sau thue" in norm or "lnst" in norm or "profit after tax" in norm:
+        if param == "profit_after_tax":
+            score += 24
+    if "nguon von vay" in norm or "von vay" in norm or "bank loan" in norm:
+        if param == "bank_loan":
+            score += 24
+    if "lai vay" in norm or "lai suat" in norm or "interest rate" in norm:
+        if param == "bank_loan":
+            score -= 35
+    if param == "project_npv" and any(token in norm for token in ["equity", "chu dau tu", "investor", "von chu"]):
+        score -= 45
+    if param == "project_irr" and any(token in norm for token in ["equity", "chu dau tu", "investor", "von chu"]):
+        score -= 45
+    return score
+
+
+def numeric_quality_score(value: Any, value_type: str, formula: bool) -> int:
+    if formula:
+        return 12
+    if not isinstance(value, (int, float)):
+        return 0
+    number = float(value)
+    if value_type == "percent":
+        return 22 if -1.5 <= number <= 1.5 else -15
+    if value_type == "currency":
+        magnitude = abs(number)
+        if magnitude >= 1000:
+            return 16
+        if magnitude == 0:
+            return -10
+    return 4
+
+
+def candidate_rank(candidate: dict[str, Any]) -> tuple[int, int, int, str]:
+    role = str(candidate.get("role") or "")
+    param = str(candidate.get("parameter_key") or "")
+    label = str(candidate.get("nearby_label") or "")
+    sheet = str(candidate.get("sheet") or "")
+    value = candidate.get("_raw_value")
+    formula = bool(candidate.get("formula"))
+    value_type = str(candidate.get("type") or "")
+    confidence_points = {"high": 80, "medium": 45, "low": 10}.get(str(candidate.get("confidence")), 0)
+    score = confidence_points + param_label_score(param, label, role)
+
+    try:
+        row, col = coordinate_to_tuple(str(candidate.get("cell") or "A1"))
+    except Exception:
+        row, col = 999999, 999999
+
+    if role == "output":
+        score += output_sheet_score(param, sheet)
+        score += output_context_score(param, label)
+        score += numeric_quality_score(value, value_type, formula)
+        if col <= 2 and not formula:
+            score -= 60
+        if value_type == "currency" and isinstance(value, (int, float)) and abs(float(value)) < 1000:
+            score -= 35
+    elif role == "input":
+        score += 12 if not formula else -30
+        score += numeric_quality_score(value, value_type, formula)
+
+    has_value = 0 if candidate.get("current_value") not in {"", "="} else -1
+    return (score, has_value, -row, f"{sheet}!{col}")
 
 
 def sanitize_workbook_defined_names(excel_path: Path) -> list[str]:
@@ -252,7 +410,6 @@ def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
     scan_warnings: list[str] = preflight_warnings + [str(w.message) for w in caught_warnings]
     sheets = [{"title": ws.title, "max_row": ws.max_row, "max_column": ws.max_column} for ws in wb.worksheets]
 
-    seen: set[tuple[str, str]] = set()
     try:
         for ws in wb.worksheets:
             # Cap huge sheets for UI responsiveness while still covering normal financial summary sheets.
@@ -263,6 +420,8 @@ def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
                         if value is None:
                             continue
                         formula = is_formula(value)
+                        if formula and str(value).strip() == "=":
+                            continue
                         label = nearby_label(ws, cell.row, cell.column)
                         value_is_numeric = isinstance(value, (int, float))
                         value_is_formula_or_numeric = value_is_numeric or formula
@@ -281,7 +440,6 @@ def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
                         if value_is_numeric and not formula:
                             param = guess_param(label, INPUT_KEYWORDS)
                             if param:
-                                key = ("input", param)
                                 t = type_guess(value, label, param)
                                 min_v, max_v = default_min_max(param, t)
                                 candidate = {
@@ -305,16 +463,16 @@ def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
                                     "aliases": aliases_for(param, "input"),
                                     "target_mode": "cell",
                                     "notes": "",
+                                    "_raw_value": value,
                                 }
-                                if key not in seen:
-                                    seen.add(key)
-                                    candidates.append(candidate)
+                                candidates.append(candidate)
 
                         # Outputs: numeric or formula cells near output-ish labels.
                         if value_is_formula_or_numeric:
-                            param = guess_param(label, OUTPUT_KEYWORDS)
+                            param = guess_output_param(label)
+                            if not param:
+                                param = guess_contextual_output_param(ws, cell.row, cell.column, label)
                             if param:
-                                key = ("output", param)
                                 t = type_guess(value, label, param)
                                 candidate = {
                                     "id": f"output::{param}::{ws.title}!{cell.coordinate}",
@@ -337,18 +495,26 @@ def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
                                     "aliases": aliases_for(param, "output"),
                                     "target_mode": "cell",
                                     "notes": "",
+                                    "_raw_value": value,
                                 }
-                                if key not in seen:
-                                    seen.add(key)
-                                    candidates.append(candidate)
+                                candidates.append(candidate)
                     except Exception as exc:
                         scan_warnings.append(f"Skipped {ws.title}!{cell.coordinate}: {exc}")
     finally:
         wb.close()
 
-    # Prioritize approved/high confidence first, then inputs, then outputs.
-    score = {"high": 0, "medium": 1, "low": 2}
-    candidates.sort(key=lambda x: (score.get(str(x.get("confidence")), 9), 0 if x.get("role") == "input" else 1, x.get("parameter_key", "")))
+    # Pick the best cell per role/parameter using workbook context, not just first match.
+    candidates.sort(key=candidate_rank, reverse=True)
+    best_candidates: list[dict[str, Any]] = []
+    best_seen: set[tuple[str, str]] = set()
+    for candidate in candidates:
+        key = (str(candidate.get("role")), str(candidate.get("parameter_key")))
+        if key in best_seen:
+            continue
+        best_seen.add(key)
+        candidate.pop("_raw_value", None)
+        best_candidates.append(candidate)
+    candidates = best_candidates
     return {
         "excel": str(excel_path),
         "workbook_name": excel_path.name,
