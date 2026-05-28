@@ -26,6 +26,7 @@ FRIENDLY_NAMES = {
     "admin_cost_rate": "Chi phí quản lý",
     "sales_volume_change": "Điều chỉnh sản lượng bán",
     "debt_financing_ratio": "Tỷ lệ vay / debt ratio",
+    "premium_change": "Điều chỉnh Premium giao dịch",
     "project_npv": "NPV dự án",
     "project_irr": "IRR dự án",
     "equity_npv": "NPV chủ đầu tư",
@@ -49,6 +50,7 @@ INPUT_KEYWORDS: dict[str, list[str]] = {
     "admin_cost_rate": ["chi phí quản lý", "chi phi quan ly", "g&a", "admin cost", "management cost"],
     "sales_volume_change": ["sản lượng", "san luong", "số căn", "so can", "sales volume", "units sold"],
     "debt_financing_ratio": ["tỷ lệ vay", "ty le vay", "vốn vay", "von vay", "debt ratio", "loan ratio"],
+    "premium_change": ["premium", "premium giao dịch", "premium giao dich", "thay đổi premium", "thay doi premium", "tỷ lệ thay đổi premium", "ty le thay doi premium"],
 }
 
 OUTPUT_KEYWORDS: dict[str, list[str]] = {
@@ -606,6 +608,7 @@ def build_model_map_from_candidates(profile_name: str, candidates: list[dict[str
                 "editable": as_bool(item.get("editable"), True),
                 "min": clean_number(item.get("min")),
                 "max": clean_number(item.get("max")),
+                "base_value": clean_number(item.get("base_value")),
                 "unit": unit,
                 "description": desc,
                 "aliases": aliases,

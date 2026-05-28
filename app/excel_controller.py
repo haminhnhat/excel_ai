@@ -189,8 +189,11 @@ class ExcelController:
                     )
             self._progress(f"xlwings:write_inputs:done:{len(applied)}")
 
-            # Force full recalc. CalculateFullRebuild exists in Excel COM on Windows.
+            # Force full recalc only when it is useful. Read-only requests can use
+            # workbook values directly; recalculating large Excel models can take minutes.
             recalc_mode = os.getenv("EXCEL_RECALC_MODE", "calculate").lower().strip()
+            if not applied and os.getenv("EXCEL_RECALC_READ_ONLY", "false").lower().strip() != "true":
+                recalc_mode = "none"
             self._progress(f"xlwings:recalculate:start:{recalc_mode}")
             if recalc_mode == "full_rebuild":
                 try:
@@ -211,9 +214,12 @@ class ExcelController:
             self._progress("xlwings:read_outputs:start")
             outputs = self._read_outputs_xlwings(book, plan)
             self._progress(f"xlwings:read_outputs:done:{len(outputs)}")
-            self._progress("xlwings:save_workbook:start")
-            book.save(str(workbook_path))
-            self._progress("xlwings:save_workbook:done")
+            if applied:
+                self._progress("xlwings:save_workbook:start")
+                book.save(str(workbook_path))
+                self._progress("xlwings:save_workbook:done")
+            else:
+                self._progress("xlwings:save_workbook:skipped:no_changes")
             return applied, outputs
         finally:
             if book is not None:

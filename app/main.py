@@ -81,6 +81,7 @@ class OnboardingCandidate(BaseModel):
     unit: str | None = None
     min: float | None = None
     max: float | None = None
+    base_value: float | None = None
     editable: bool | None = True
     confidence: str | None = None
     nearby_label: str | None = None

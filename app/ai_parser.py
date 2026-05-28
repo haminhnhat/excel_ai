@@ -30,6 +30,7 @@ ABSOLUTE_RATE_PARAMS = {
 ADJUSTMENT_PARAMS = {
     "investment_cost_change",
     "selling_price_change",
+    "premium_change",
 }
 
 NEGATIVE_WORDS = [
@@ -100,6 +101,16 @@ def _first_number(text: str) -> float | None:
     if not m:
         return None
     return parse_number_token(m.group(1))
+
+
+def _target_number(text: str) -> float | None:
+    m = re.search(
+        rf"(?:la|=|bang|thanh|len|toi|den|sang)\s*\$?\s*{NUMBER_RE}",
+        text,
+    )
+    if m:
+        return parse_number_token(m.group(1))
+    return _first_number(text)
 
 
 def _signed_percent_for_change(text: str) -> float | None:
@@ -232,8 +243,9 @@ def _best_fuzzy_param(text: str, aliases: dict[str, list[str]]) -> tuple[str | N
     return best_param, best_score, best_alias
 
 
-def _change_from_segment(param: str, segment: str) -> Change | None:
+def _change_from_segment(param: str, segment: str, meta: Dict[str, Any] | None = None) -> Change | None:
     """Convert one parameter-specific clause segment into a Change."""
+    meta = meta or {}
     if param == "investment_cost_change":
         pct = _extract_tmdt_from_to(segment)
         if pct is None:
@@ -248,6 +260,17 @@ def _change_from_segment(param: str, segment: str) -> Change | None:
             return None
         return Change(parameter=param, value=pct, operation="set", reason="Parsed selling price / revenue change.")
 
+    if param in ADJUSTMENT_PARAMS or param.endswith("_change"):
+        pct = _signed_percent_for_change(segment)
+        if pct is None and meta.get("base_value") not in (None, ""):
+            target = _target_number(segment)
+            base = float(meta["base_value"])
+            if target is not None and base:
+                pct = target / base - 1
+        if pct is None:
+            return None
+        return Change(parameter=param, value=pct, operation="set", reason=f"Parsed {param} adjustment.")
+
     if param in ABSOLUTE_RATE_PARAMS:
         value = _extract_rate_from_to(segment)
         if value is None:
@@ -256,10 +279,13 @@ def _change_from_segment(param: str, segment: str) -> Change | None:
             return None
         return Change(parameter=param, value=value, operation="set", reason=f"Parsed {param}.")
 
-    # Generic fallback for future percent inputs.
+    # Generic fallback for future numeric inputs.
     pct = _first_percent(segment)
     if pct is not None:
         return Change(parameter=param, value=pct, operation="set", reason=f"Parsed {param}.")
+    value = _target_number(segment)
+    if value is not None:
+        return Change(parameter=param, value=value, operation="set", reason=f"Parsed {param}.")
     return None
 
 
@@ -279,9 +305,9 @@ def _parse_with_aliases(command: str, model_map: Dict[str, Any]) -> list[Change]
                 # Include a little text before adjustment aliases to capture
                 # "giảm giá bán 5%". For absolute rates, start at the alias so
                 # "VAT 10% TNDN 20%" does not leak 10% into TNDN.
-                segment_start = max(0, start - 18) if param in ADJUSTMENT_PARAMS else start
+                segment_start = max(0, start - 18) if param in ADJUSTMENT_PARAMS or param.endswith("_change") else start
                 segment = clause[segment_start:next_start]
-                change = _change_from_segment(param, segment)
+                change = _change_from_segment(param, segment, model_map.get("inputs", {}).get(param, {}))
                 if change is not None:
                     _add_or_replace(changes, change)
             continue
@@ -289,7 +315,7 @@ def _parse_with_aliases(command: str, model_map: Dict[str, Any]) -> list[Change]
         # Fuzzy fallback when no exact alias matched.
         param, score, alias = _best_fuzzy_param(clause, aliases)
         if param and score >= 0.78:
-            change = _change_from_segment(param, clause)
+            change = _change_from_segment(param, clause, model_map.get("inputs", {}).get(param, {}))
             if change is not None:
                 change.reason = f"Parsed by fuzzy alias matching: '{alias}' score={score:.2f}."
                 _add_or_replace(changes, change)

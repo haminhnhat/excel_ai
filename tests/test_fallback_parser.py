@@ -12,6 +12,7 @@ def _model_map():
             "vat_rate": {"aliases": ["vat", "thue vat"], "editable": True, "min": 0, "max": 0.15},
             "cit_rate": {"aliases": ["tndn", "cit", "thue tndn"], "editable": True, "min": 0, "max": 0.35},
             "marketing_rate": {"aliases": ["marketing", "truyen thong"], "editable": True, "min": 0, "max": 0.2},
+            "premium_change": {"aliases": ["premium", "premium giao dich"], "editable": True, "min": -1.0, "max": 1.0, "base_value": 260},
         },
         "outputs": {
             "project_npv": {"aliases": ["npv du an", "npv"]},
@@ -72,3 +73,13 @@ def test_output_only_command_allowed_by_validator():
     assert "project_npv" in plan.requested_outputs
     assert "project_irr" in plan.requested_outputs
     validate_action_plan(plan, model_map)
+
+
+def test_premium_change_percent():
+    changes = _changes("Premium giao dich tang 5%")
+    assert round(changes["premium_change"], 6) == 0.05
+
+
+def test_premium_change_absolute_target_with_base_value():
+    changes = _changes("Premium giao dich la 270")
+    assert round(changes["premium_change"], 6) == round(270 / 260 - 1, 6)
