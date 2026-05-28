@@ -144,6 +144,12 @@ Nếu scenario chạy lỗi:
 - Đóng file Excel đang bị mở ở chế độ protected/read-only nếu cần.
 - Kiểm tra profile có đúng với workbook đang dùng không.
 
+Nếu scenario chạy lâu:
+
+- Workbook lớn có thể mất vài phút.
+- Xem đồng hồ ở góc `Scenario result`.
+- Nếu quá 5 phút, báo admin/kỹ thuật kiểm tra `logs/scenario_runtime.log`.
+
 Nếu validation báo input là ô công thức:
 
 - Chọn lại ô input thật trong `Correct Cell`.
@@ -177,3 +183,20 @@ Setup_First_Time.bat
 ```
 
 Nếu setup thấy package trong `vendor/wheels`, app sẽ cài offline và không cần tải package từ internet.
+
+## 9. Ghi chú nâng độ chính xác
+
+Khi user chạy scenario, app tự ghi log kỹ thuật vào:
+
+```text
+logs/accuracy_events.jsonl
+```
+
+Nếu user báo app hiểu sai câu lệnh, admin/kỹ thuật nên lấy:
+
+- Câu lệnh user đã nhập.
+- Tên profile.
+- File Excel đang dùng.
+- Dòng log tương ứng trong `logs/accuracy_events.jsonl`.
+
+Sau đó có thể bổ sung alias hoặc test case để lần sau app hiểu đúng hơn.

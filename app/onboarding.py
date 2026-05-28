@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import shutil
+import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 from pathlib import Path
 from typing import Any
+import warnings
 
 import yaml
 from openpyxl import load_workbook
@@ -61,6 +66,8 @@ OUTPUT_KEYWORDS: dict[str, list[str]] = {
 DEFAULT_OUTPUT_ORDER = [
     "profit_after_tax", "project_npv", "project_irr", "equity_npv", "equity_irr", "roi", "total_investment", "bank_loan", "total_revenue", "revenue"
 ]
+
+WORKBOOK_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 
 def is_formula(value: Any) -> bool:
@@ -171,99 +178,173 @@ def aliases_for(param: str, role: str) -> list[str]:
     return source.get(param, [])
 
 
+def sanitize_workbook_defined_names(excel_path: Path) -> list[str]:
+    """Remove broken workbook defined names that make openpyxl refuse to load.
+
+    Some Excel files contain stale print-area/print-title metadata such as
+    `_xlnm.Print_Titles = #N/A`. Excel may still open the file, but openpyxl
+    fails before we can scan any sheet. The uploaded workbook is already a copy,
+    so it is safe to remove only these invalid metadata entries.
+    """
+    warnings_out: list[str] = []
+    if excel_path.suffix.lower() not in {".xlsx", ".xlsm"}:
+        return warnings_out
+
+    with zipfile.ZipFile(excel_path, "r") as zin:
+        try:
+            workbook_xml = zin.read("xl/workbook.xml")
+        except KeyError:
+            return warnings_out
+
+        root = ET.fromstring(workbook_xml)
+        ns = {"x": WORKBOOK_NS}
+        defined_names = root.find("x:definedNames", ns)
+        if defined_names is None:
+            return warnings_out
+
+        removed = 0
+        for defined_name in list(defined_names):
+            name = str(defined_name.attrib.get("name", ""))
+            value = (defined_name.text or "").strip()
+            is_print_metadata = name in {"_xlnm.Print_Titles", "_xlnm.Print_Area"}
+            is_invalid_ref = value in {"#N/A", "#REF!", "#VALUE!"} or value.startswith("#")
+            if is_invalid_ref:
+                defined_names.remove(defined_name)
+                removed += 1
+                scope = defined_name.attrib.get("localSheetId")
+                scope_text = f" localSheetId={scope}" if scope is not None else ""
+                reason = "print metadata" if is_print_metadata else "broken reference"
+                warnings_out.append(f"Removed invalid workbook defined name ({reason}): {name}{scope_text}={value}")
+
+        if removed == 0:
+            return warnings_out
+        if len(list(defined_names)) == 0:
+            root.remove(defined_names)
+
+        ET.register_namespace("", WORKBOOK_NS)
+        fixed_xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=excel_path.suffix) as tmp:
+            tmp_path = Path(tmp.name)
+
+        try:
+            with zipfile.ZipFile(tmp_path, "w") as zout:
+                for item in zin.infolist():
+                    if item.filename == "xl/workbook.xml":
+                        zout.writestr(item, fixed_xml)
+                    else:
+                        zout.writestr(item, zin.read(item.filename))
+            shutil.move(str(tmp_path), excel_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
+
+    return warnings_out
+
+
 def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
-    wb = load_workbook(excel_path, data_only=False, read_only=False)
+    preflight_warnings = sanitize_workbook_defined_names(excel_path)
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        wb = load_workbook(excel_path, data_only=False, read_only=False)
     candidates: list[dict[str, Any]] = []
     formula_errors: list[dict[str, Any]] = []
+    scan_warnings: list[str] = preflight_warnings + [str(w.message) for w in caught_warnings]
     sheets = [{"title": ws.title, "max_row": ws.max_row, "max_column": ws.max_column} for ws in wb.worksheets]
 
     seen: set[tuple[str, str]] = set()
-    for ws in wb.worksheets:
-        # Cap huge sheets for UI responsiveness while still covering normal financial summary sheets.
-        for row in ws.iter_rows(max_row=min(ws.max_row, 500), max_col=min(ws.max_column, 80)):
-            for cell in row:
-                value = cell.value
-                if value is None:
-                    continue
-                formula = is_formula(value)
-                label = nearby_label(ws, cell.row, cell.column)
-                value_is_numeric = isinstance(value, (int, float))
-                value_is_formula_or_numeric = value_is_numeric or formula
-                if isinstance(value, str) and any(token in value for token in ["#REF!", "#VALUE!", "#DIV/0!", "#N/A"]):
-                    formula_errors.append({
-                        "sheet": ws.title,
-                        "cell": cell.coordinate,
-                        "value": compact_value(value),
-                        "nearby_label": label,
-                    })
+    try:
+        for ws in wb.worksheets:
+            # Cap huge sheets for UI responsiveness while still covering normal financial summary sheets.
+            for row in ws.iter_rows(max_row=min(ws.max_row, 500), max_col=min(ws.max_column, 80)):
+                for cell in row:
+                    try:
+                        value = cell.value
+                        if value is None:
+                            continue
+                        formula = is_formula(value)
+                        label = nearby_label(ws, cell.row, cell.column)
+                        value_is_numeric = isinstance(value, (int, float))
+                        value_is_formula_or_numeric = value_is_numeric or formula
+                        if isinstance(value, str) and any(token in value for token in ["#REF!", "#VALUE!", "#DIV/0!", "#N/A"]):
+                            formula_errors.append({
+                                "sheet": ws.title,
+                                "cell": cell.coordinate,
+                                "value": compact_value(value),
+                                "nearby_label": label,
+                            })
 
-                if not label:
-                    continue
+                        if not label:
+                            continue
 
-                # Inputs: hardcoded numeric values near input-ish labels.
-                if value_is_numeric and not formula:
-                    param = guess_param(label, INPUT_KEYWORDS)
-                    if param:
-                        key = ("input", param)
-                        t = type_guess(value, label, param)
-                        min_v, max_v = default_min_max(param, t)
-                        candidate = {
-                            "id": f"input::{param}::{ws.title}!{cell.coordinate}",
-                            "decision": "Approve",
-                            "role": "input",
-                            "parameter_key": param,
-                            "friendly_name": FRIENDLY_NAMES.get(param, param),
-                            "sheet": ws.title,
-                            "cell": cell.coordinate,
-                            "current_value": compact_value(value),
-                            "formula": False,
-                            "type": t,
-                            "unit": infer_unit(t),
-                            "min": min_v,
-                            "max": max_v,
-                            "editable": True,
-                            "confidence": confidence_for("input", param, label, False),
-                            "nearby_label": label,
-                            "description": f"Candidate input found near label: {label}",
-                            "aliases": aliases_for(param, "input"),
-                            "target_mode": "cell",
-                            "notes": "",
-                        }
-                        if key not in seen:
-                            seen.add(key)
-                            candidates.append(candidate)
+                        # Inputs: hardcoded numeric values near input-ish labels.
+                        if value_is_numeric and not formula:
+                            param = guess_param(label, INPUT_KEYWORDS)
+                            if param:
+                                key = ("input", param)
+                                t = type_guess(value, label, param)
+                                min_v, max_v = default_min_max(param, t)
+                                candidate = {
+                                    "id": f"input::{param}::{ws.title}!{cell.coordinate}",
+                                    "decision": "Approve",
+                                    "role": "input",
+                                    "parameter_key": param,
+                                    "friendly_name": FRIENDLY_NAMES.get(param, param),
+                                    "sheet": ws.title,
+                                    "cell": cell.coordinate,
+                                    "current_value": compact_value(value),
+                                    "formula": False,
+                                    "type": t,
+                                    "unit": infer_unit(t),
+                                    "min": min_v,
+                                    "max": max_v,
+                                    "editable": True,
+                                    "confidence": confidence_for("input", param, label, False),
+                                    "nearby_label": label,
+                                    "description": f"Candidate input found near label: {label}",
+                                    "aliases": aliases_for(param, "input"),
+                                    "target_mode": "cell",
+                                    "notes": "",
+                                }
+                                if key not in seen:
+                                    seen.add(key)
+                                    candidates.append(candidate)
 
-                # Outputs: numeric or formula cells near output-ish labels.
-                if value_is_formula_or_numeric:
-                    param = guess_param(label, OUTPUT_KEYWORDS)
-                    if param:
-                        key = ("output", param)
-                        t = type_guess(value, label, param)
-                        candidate = {
-                            "id": f"output::{param}::{ws.title}!{cell.coordinate}",
-                            "decision": "Approve" if confidence_for("output", param, label, formula) == "high" else "Review",
-                            "role": "output",
-                            "parameter_key": param,
-                            "friendly_name": FRIENDLY_NAMES.get(param, param),
-                            "sheet": ws.title,
-                            "cell": cell.coordinate,
-                            "current_value": compact_value(value),
-                            "formula": bool(formula),
-                            "type": t,
-                            "unit": infer_unit(t),
-                            "min": None,
-                            "max": None,
-                            "editable": False,
-                            "confidence": confidence_for("output", param, label, formula),
-                            "nearby_label": label,
-                            "description": f"Candidate output found near label: {label}",
-                            "aliases": aliases_for(param, "output"),
-                            "target_mode": "cell",
-                            "notes": "",
-                        }
-                        if key not in seen:
-                            seen.add(key)
-                            candidates.append(candidate)
+                        # Outputs: numeric or formula cells near output-ish labels.
+                        if value_is_formula_or_numeric:
+                            param = guess_param(label, OUTPUT_KEYWORDS)
+                            if param:
+                                key = ("output", param)
+                                t = type_guess(value, label, param)
+                                candidate = {
+                                    "id": f"output::{param}::{ws.title}!{cell.coordinate}",
+                                    "decision": "Approve" if confidence_for("output", param, label, formula) == "high" else "Review",
+                                    "role": "output",
+                                    "parameter_key": param,
+                                    "friendly_name": FRIENDLY_NAMES.get(param, param),
+                                    "sheet": ws.title,
+                                    "cell": cell.coordinate,
+                                    "current_value": compact_value(value),
+                                    "formula": bool(formula),
+                                    "type": t,
+                                    "unit": infer_unit(t),
+                                    "min": None,
+                                    "max": None,
+                                    "editable": False,
+                                    "confidence": confidence_for("output", param, label, formula),
+                                    "nearby_label": label,
+                                    "description": f"Candidate output found near label: {label}",
+                                    "aliases": aliases_for(param, "output"),
+                                    "target_mode": "cell",
+                                    "notes": "",
+                                }
+                                if key not in seen:
+                                    seen.add(key)
+                                    candidates.append(candidate)
+                    except Exception as exc:
+                        scan_warnings.append(f"Skipped {ws.title}!{cell.coordinate}: {exc}")
+    finally:
+        wb.close()
 
     # Prioritize approved/high confidence first, then inputs, then outputs.
     score = {"high": 0, "medium": 1, "low": 2}
@@ -275,9 +356,11 @@ def scan_workbook_for_mapping(excel_path: Path) -> dict[str, Any]:
         "sheets": sheets,
         "candidates": candidates,
         "formula_errors": formula_errors,
+        "scan_warnings": scan_warnings[:100],
         "summary": {
             "candidate_count": len(candidates),
             "formula_error_count": len(formula_errors),
+            "scan_warning_count": len(scan_warnings),
             "sheet_count": len(sheets),
         },
     }
@@ -399,6 +482,7 @@ def input_targets(meta: dict[str, Any]) -> list[str]:
 
 
 def validate_model_map_against_workbook(model_map: dict[str, Any], excel_path: Path) -> dict[str, Any]:
+    sanitize_workbook_defined_names(excel_path)
     wb = load_workbook(excel_path, data_only=False)
     errors: list[str] = []
     warnings: list[str] = []

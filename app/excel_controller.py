@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Tuple
 
 from .schemas import ActionPlan, AppliedChange, OutputValue, ScenarioResult
 from .utils import append_audit_log, safe_filename
@@ -20,13 +21,19 @@ class ExcelController:
         output_dir: str | Path = "outputs",
         audit_log_path: str | Path = "logs/audit_log.csv",
         engine: str = "auto",
+        progress_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.model_map = model_map
         self.output_dir = Path(output_dir)
         self.audit_log_path = Path(audit_log_path)
         self.engine = engine
+        self.progress_callback = progress_callback
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _progress(self, stage: str) -> None:
+        if self.progress_callback is not None:
+            self.progress_callback(stage)
 
     def run_scenario(self, source_file: str | Path, plan: ActionPlan) -> ScenarioResult:
         source = Path(source_file)
@@ -36,26 +43,33 @@ class ExcelController:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         scenario_name = safe_filename(plan.scenario_name)
         target = self.output_dir / f"{stamp}_{scenario_name}{source.suffix}"
+        self._progress("copy_workbook:start")
         shutil.copy2(source, target)
+        self._progress("copy_workbook:done")
 
         engine = self.engine.lower().strip()
         warnings: list[str] = []
 
         if engine == "auto":
             try:
+                self._progress("engine:xlwings:start")
                 applied, outputs = self._run_with_xlwings(target, plan)
                 used_engine = "xlwings"
                 recalculated = True
             except Exception as e:
+                self._progress(f"engine:xlwings:failed:{e}")
                 warnings.append(f"xlwings failed, falling back to openpyxl. Reason: {e}")
+                self._progress("engine:openpyxl:start")
                 applied, outputs = self._run_with_openpyxl(target, plan)
                 used_engine = "openpyxl"
                 recalculated = False
         elif engine == "xlwings":
+            self._progress("engine:xlwings:start")
             applied, outputs = self._run_with_xlwings(target, plan)
             used_engine = "xlwings"
             recalculated = True
         elif engine == "openpyxl":
+            self._progress("engine:openpyxl:start")
             applied, outputs = self._run_with_openpyxl(target, plan)
             used_engine = "openpyxl"
             recalculated = False
@@ -81,6 +95,7 @@ class ExcelController:
                 for c in applied
             ],
         )
+        self._progress("audit_log:done")
 
         return ScenarioResult(
             scenario_name=plan.scenario_name,
@@ -141,14 +156,18 @@ class ExcelController:
     def _run_with_xlwings(self, workbook_path: Path, plan: ActionPlan) -> Tuple[list[AppliedChange], Dict[str, OutputValue]]:
         import xlwings as xw
 
+        self._progress("xlwings:create_excel_app:start")
         app = xw.App(visible=False, add_book=False)
         app.display_alerts = False
         app.screen_updating = False
         book = None
         try:
+            self._progress("xlwings:open_workbook:start")
             book = app.books.open(str(workbook_path))
+            self._progress("xlwings:open_workbook:done")
             applied: list[AppliedChange] = []
 
+            self._progress("xlwings:write_inputs:start")
             for change in plan.changes:
                 meta = self.model_map["inputs"][change.parameter]
                 sheet_name = meta["sheet"]
@@ -168,19 +187,39 @@ class ExcelController:
                             reason=change.reason,
                         )
                     )
+            self._progress(f"xlwings:write_inputs:done:{len(applied)}")
 
             # Force full recalc. CalculateFullRebuild exists in Excel COM on Windows.
-            try:
-                app.api.CalculateFullRebuild()
-            except Exception:
+            recalc_mode = os.getenv("EXCEL_RECALC_MODE", "calculate").lower().strip()
+            self._progress(f"xlwings:recalculate:start:{recalc_mode}")
+            if recalc_mode == "full_rebuild":
+                try:
+                    app.api.CalculateFullRebuild()
+                except Exception:
+                    app.calculate()
+            elif recalc_mode == "full":
+                try:
+                    app.api.CalculateFull()
+                except Exception:
+                    app.calculate()
+            elif recalc_mode == "none":
+                self._progress("xlwings:recalculate:skipped")
+            else:
                 app.calculate()
+            self._progress(f"xlwings:recalculate:done:{recalc_mode}")
 
+            self._progress("xlwings:read_outputs:start")
             outputs = self._read_outputs_xlwings(book, plan)
+            self._progress(f"xlwings:read_outputs:done:{len(outputs)}")
+            self._progress("xlwings:save_workbook:start")
             book.save(str(workbook_path))
+            self._progress("xlwings:save_workbook:done")
             return applied, outputs
         finally:
             if book is not None:
+                self._progress("xlwings:close_workbook")
                 book.close()
+            self._progress("xlwings:quit_excel")
             app.quit()
 
     def _read_outputs_xlwings(self, book: Any, plan: ActionPlan) -> Dict[str, OutputValue]:
@@ -203,9 +242,12 @@ class ExcelController:
     def _run_with_openpyxl(self, workbook_path: Path, plan: ActionPlan) -> Tuple[list[AppliedChange], Dict[str, OutputValue]]:
         from openpyxl import load_workbook
 
+        self._progress("openpyxl:load_workbook:start")
         wb = load_workbook(workbook_path)
+        self._progress("openpyxl:load_workbook:done")
         applied: list[AppliedChange] = []
 
+        self._progress("openpyxl:write_inputs:start")
         for change in plan.changes:
             meta = self.model_map["inputs"][change.parameter]
             sheet_name = meta["sheet"]
@@ -227,6 +269,7 @@ class ExcelController:
                         reason=change.reason,
                     )
                 )
+        self._progress(f"openpyxl:write_inputs:done:{len(applied)}")
 
         # Ask Excel to recalculate when the workbook is opened.
         try:
@@ -235,10 +278,13 @@ class ExcelController:
             wb.calculation.calcMode = "auto"
         except Exception:
             pass
+        self._progress("openpyxl:save_workbook:start")
         wb.save(workbook_path)
+        self._progress("openpyxl:save_workbook:done")
         wb.close()
 
         # Read cached formula results. These may be stale unless Excel recalculated previously.
+        self._progress("openpyxl:read_cached_outputs:start")
         wb_values = load_workbook(workbook_path, data_only=True)
         outputs: Dict[str, OutputValue] = {}
         for key in plan.requested_outputs:
@@ -254,4 +300,5 @@ class ExcelController:
                 description=meta.get("description"),
             )
         wb_values.close()
+        self._progress(f"openpyxl:read_cached_outputs:done:{len(outputs)}")
         return applied, outputs

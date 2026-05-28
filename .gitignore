@@ -23,6 +23,9 @@ logs/*
 vendor/wheels/*
 !vendor/wheels/README.md
 
+# Uploaded onboarding workbooks/profiles created during local testing
+uploads/onboarding/*
+
 # Excel files
 *.xlsx
 *.xlsm

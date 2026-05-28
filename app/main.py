@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
+import traceback
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .ai_parser import parse_user_command
+from .accuracy import write_accuracy_event
 from .config_loader import list_profiles, load_model_map_for_profile, resolve_model_map_path
 from .excel_controller import ExcelController
 from .utils import format_value, safe_filename
@@ -38,6 +41,18 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 AUDIT_LOG_PATH = Path(os.getenv("AUDIT_LOG_PATH", BASE_DIR / "logs" / "audit_log.csv"))
 if not AUDIT_LOG_PATH.is_absolute():
     AUDIT_LOG_PATH = BASE_DIR / AUDIT_LOG_PATH
+
+ACCURACY_LOG_PATH = Path(os.getenv("ACCURACY_LOG_PATH", BASE_DIR / "logs" / "accuracy_events.jsonl"))
+if not ACCURACY_LOG_PATH.is_absolute():
+    ACCURACY_LOG_PATH = BASE_DIR / ACCURACY_LOG_PATH
+
+ERROR_LOG_PATH = Path(os.getenv("ERROR_LOG_PATH", BASE_DIR / "logs" / "app_errors.log"))
+if not ERROR_LOG_PATH.is_absolute():
+    ERROR_LOG_PATH = BASE_DIR / ERROR_LOG_PATH
+
+SCENARIO_RUNTIME_LOG_PATH = Path(os.getenv("SCENARIO_RUNTIME_LOG_PATH", BASE_DIR / "logs" / "scenario_runtime.log"))
+if not SCENARIO_RUNTIME_LOG_PATH.is_absolute():
+    SCENARIO_RUNTIME_LOG_PATH = BASE_DIR / SCENARIO_RUNTIME_LOG_PATH
 
 app = FastAPI(title="Excel AI Controller", version="0.1.0")
 
@@ -99,12 +114,40 @@ def _rel(path: Path) -> str:
         return str(path)
 
 
+def _log_error(context: str, exc: Exception) -> None:
+    try:
+        ERROR_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with ERROR_LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(f"\n[{context}]\n")
+            f.write(traceback.format_exc())
+            f.write("\n")
+    except Exception:
+        pass
+
+
+def _append_runtime_log(message: str) -> None:
+    try:
+        SCENARIO_RUNTIME_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SCENARIO_RUNTIME_LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(message + "\n")
+    except Exception:
+        pass
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     index_path = WEB_DIR / "index.html"
     if index_path.exists():
         return index_path.read_text(encoding="utf-8")
     return "<h1>Excel AI Controller</h1>"
+
+
+@app.get("/favicon.ico")
+def favicon() -> FileResponse:
+    icon_path = WEB_DIR / "favicon.svg"
+    if icon_path.exists():
+        return FileResponse(icon_path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Favicon not found")
 
 
 @app.get("/health")
@@ -151,6 +194,7 @@ async def onboarding_analyze(
     try:
         analysis = scan_workbook_for_mapping(excel_path)
     except Exception as e:
+        _log_error(f"onboarding_analyze file={excel_path}", e)
         raise HTTPException(status_code=500, detail=f"Could not analyze workbook: {e}")
 
     analysis["excel_path"] = _rel(excel_path)
@@ -210,18 +254,43 @@ async def run_scenario(
     model_profile: Optional[str] = Form(default=None),
     excel_path: Optional[str] = Form(default=None),
 ) -> dict:
+    started_at = time.perf_counter()
+    stage_timings: list[dict[str, Any]] = []
+
+    def mark(stage: str) -> None:
+        elapsed = round(time.perf_counter() - started_at, 3)
+        item = {"elapsed_seconds": elapsed, "stage": stage}
+        stage_timings.append(item)
+        _append_runtime_log(f"{elapsed:>8.3f}s profile={model_profile or os.getenv('MODEL_PROFILE') or ''} stage={stage}")
+
+    accuracy_event: dict[str, Any] = {
+        "endpoint": "/api/scenario",
+        "command": command,
+        "requested_profile": model_profile,
+        "engine": engine or os.getenv("EXCEL_ENGINE", "auto"),
+        "status": "started",
+    }
     try:
+        mark("request:start")
         model_map, model_map_path = load_model_map_for_profile(profile=model_profile)
+        mark("profile:loaded")
+        accuracy_event["model_map_path"] = str(model_map_path)
 
         if file is not None and file.filename:
             safe_name = Path(file.filename).name
             source_path = UPLOAD_DIR / safe_name
             with source_path.open("wb") as f:
                 shutil.copyfileobj(file.file, f)
+            accuracy_event["excel_source"] = "uploaded_file"
+            accuracy_event["excel_path"] = _rel(source_path)
         elif excel_path:
             source_path = _resolve_any_path(excel_path)
+            accuracy_event["excel_source"] = "onboarded_path"
+            accuracy_event["excel_path"] = _rel(source_path)
         else:
             source_path = _resolve_model_path()
+            accuracy_event["excel_source"] = "default_model_path"
+            accuracy_event["excel_path"] = _rel(source_path)
 
         if not source_path.exists():
             raise HTTPException(
@@ -229,16 +298,35 @@ async def run_scenario(
                 detail=f"Excel model not found: {source_path}. Upload a file or set MODEL_PATH in .env.",
             )
 
+        mark("parse_command:start")
         plan = parse_user_command(command, model_map)
+        mark("parse_command:done")
+        accuracy_event["parsed_action_plan"] = plan.model_dump()
+        mark("validate_action_plan:start")
         plan = validate_action_plan(plan, model_map)
+        mark("validate_action_plan:done")
+        accuracy_event["validated_action_plan"] = plan.model_dump()
 
         controller = ExcelController(
             model_map=model_map,
             output_dir=OUTPUT_DIR,
             audit_log_path=AUDIT_LOG_PATH,
             engine=engine or os.getenv("EXCEL_ENGINE", "auto"),
+            progress_callback=mark,
         )
+        mark("excel_controller:start")
         result = controller.run_scenario(source_path, plan)
+        mark("excel_controller:done")
+        accuracy_event["status"] = "ok"
+        accuracy_event["result_summary"] = {
+            "scenario_file": result.scenario_file,
+            "engine": result.engine,
+            "recalculated": result.recalculated,
+            "applied_change_count": len(result.applied_changes),
+            "output_keys": list(result.outputs.keys()),
+            "warnings": result.warnings,
+            "duration_seconds": round(time.perf_counter() - started_at, 3),
+        }
         scenario_file = Path(result.scenario_file)
         return {
             "ok": True,
@@ -249,14 +337,29 @@ async def run_scenario(
             "formatted_outputs": {
                 key: format_value(v.value, v.type, v.unit) for key, v in result.outputs.items()
             },
+            "duration_seconds": round(time.perf_counter() - started_at, 3),
+            "stage_timings": stage_timings,
             "download_url": f"/download/{scenario_file.name}",
         }
     except ValidationError as e:
+        accuracy_event["status"] = "validation_error"
+        accuracy_event["error"] = str(e)
         raise HTTPException(status_code=422, detail=str(e))
     except HTTPException:
+        accuracy_event["status"] = "http_error"
         raise
     except Exception as e:
+        accuracy_event["status"] = "error"
+        accuracy_event["error"] = str(e)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        mark(f"request:end:{accuracy_event.get('status')}")
+        accuracy_event["duration_seconds"] = round(time.perf_counter() - started_at, 3)
+        accuracy_event["stage_timings"] = stage_timings
+        try:
+            write_accuracy_event(ACCURACY_LOG_PATH, accuracy_event)
+        except Exception:
+            pass
 
 
 @app.get("/download/{filename}")

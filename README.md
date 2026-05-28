@@ -160,6 +160,7 @@ Ghi chú:
 - `AI_PROVIDER=mock`: dùng parser nội bộ, không cần API key.
 - `AI_PROVIDER=openai`: dùng OpenAI làm fallback để hiểu câu lệnh linh hoạt hơn.
 - `EXCEL_ENGINE=xlwings`: khuyến nghị cho Windows có Microsoft Excel.
+- `EXCEL_RECALC_MODE=calculate`: chế độ tính nhanh hơn cho workbook lớn. Chỉ dùng `full_rebuild` khi cần đối soát rất kỹ vì chậm hơn nhiều.
 - `openpyxl` có thể sửa ô nhưng không tính lại công thức Excel phức tạp đáng tin cậy.
 
 ## Profile mô hình
@@ -208,6 +209,65 @@ Validate profile:
 
 ```powershell
 python scripts/validate_profile.py --profile project_a --excel "models/project_a.xlsx"
+```
+
+## Nâng accuracy cho output
+
+Project có 3 công cụ để đo và cải thiện độ chính xác:
+
+1. Log accuracy khi user chạy scenario:
+
+```text
+logs/accuracy_events.jsonl
+```
+
+File này lưu câu lệnh user, profile, action plan parser tạo ra, trạng thái validate/chạy Excel, output keys và lỗi nếu có. Admin có thể dùng file này để xem câu nào parse sai và bổ sung alias/test case.
+
+Khi scenario chạy lâu, xem thêm runtime log:
+
+```text
+logs/scenario_runtime.log
+```
+
+File này ghi các stage như `xlwings:open_workbook`, `xlwings:recalculate`, `xlwings:read_outputs`, kèm số giây đã chạy. Nếu bị treo, stage cuối cùng trong file thường cho biết đang mắc ở bước nào.
+
+2. Chạy eval parser:
+
+```powershell
+python scripts/evaluate_parser_accuracy.py
+```
+
+Test case mặc định nằm ở:
+
+```text
+tests/parser_eval_cases.jsonl
+```
+
+Mỗi dòng mô tả một câu lệnh, expected changes và expected outputs. Khi thêm alias hoặc đổi model parser, chạy script này để biết accuracy tăng hay giảm.
+
+3. QA profile/mapping:
+
+```powershell
+python scripts/qa_profile_mapping.py --profile yen_my
+```
+
+Nếu có workbook thật:
+
+```powershell
+python scripts/qa_profile_mapping.py --profile yen_my --excel "models/ten_file.xlsx"
+```
+
+Script này kiểm tra các rủi ro như thiếu alias, thiếu min/max, default output sai, sheet/cell không tồn tại, input trỏ vào ô công thức, output rỗng.
+
+Quy trình cải thiện nên là:
+
+```text
+1. Chạy QA profile
+2. Chạy parser eval
+3. Cho user dùng thật
+4. Xem logs/accuracy_events.jsonl
+5. Thêm alias/test case/correction
+6. Chạy eval lại
 ```
 
 ## Quy tắc an toàn
