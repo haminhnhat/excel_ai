@@ -17,6 +17,7 @@ from .ai_parser import parse_user_command
 from .accuracy import write_accuracy_event
 from .config_loader import list_profiles, load_model_map_for_profile, resolve_model_map_path
 from .excel_controller import ExcelController
+from .sensitivity import export_sensitivity_by_prompt, export_sensitivity_range
 from .utils import format_value, safe_filename
 from .validator import ValidationError, validate_action_plan
 from .onboarding import (
@@ -361,6 +362,92 @@ async def run_scenario(
             write_accuracy_event(ACCURACY_LOG_PATH, accuracy_event)
         except Exception:
             pass
+
+
+@app.post("/api/sensitivity/export")
+async def export_sensitivity(
+    sheet: str = Form(...),
+    range_address: str = Form(...),
+    output_name: Optional[str] = Form(default=None),
+    file: Optional[UploadFile] = File(default=None),
+    excel_path: Optional[str] = Form(default=None),
+) -> dict:
+    try:
+        if file is not None and file.filename:
+            safe_name = Path(file.filename).name
+            source_path = UPLOAD_DIR / safe_name
+            with source_path.open("wb") as f:
+                shutil.copyfileobj(file.file, f)
+        elif excel_path:
+            source_path = _resolve_any_path(excel_path)
+        else:
+            source_path = _resolve_model_path()
+
+        if not source_path.exists():
+            raise HTTPException(status_code=400, detail=f"Excel model not found: {source_path}")
+
+        out_path = export_sensitivity_range(
+            source_path=source_path,
+            sheet_name=sheet.strip(),
+            range_address=range_address.strip(),
+            output_dir=OUTPUT_DIR,
+            output_name=output_name,
+        )
+        return {
+            "ok": True,
+            "source_path": _rel(source_path),
+            "sheet": sheet,
+            "range_address": range_address,
+            "file": _rel(out_path),
+            "download_url": f"/download/{out_path.name}",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log_error("sensitivity_export", e)
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.post("/api/sensitivity/export-by-prompt")
+async def export_sensitivity_by_prompt_api(
+    prompt: str = Form(...),
+    output_name: Optional[str] = Form(default=None),
+    file: Optional[UploadFile] = File(default=None),
+    excel_path: Optional[str] = Form(default=None),
+) -> dict:
+    try:
+        if file is not None and file.filename:
+            safe_name = Path(file.filename).name
+            source_path = UPLOAD_DIR / safe_name
+            with source_path.open("wb") as f:
+                shutil.copyfileobj(file.file, f)
+        elif excel_path:
+            source_path = _resolve_any_path(excel_path)
+        else:
+            source_path = _resolve_model_path()
+
+        if not source_path.exists():
+            raise HTTPException(status_code=400, detail=f"Excel model not found: {source_path}")
+
+        out_path, detected = export_sensitivity_by_prompt(
+            source_path=source_path,
+            prompt=prompt,
+            output_dir=OUTPUT_DIR,
+            output_name=output_name,
+        )
+        return {
+            "ok": True,
+            "source_path": _rel(source_path),
+            "prompt": prompt,
+            "detected": detected,
+            "file": _rel(out_path),
+            "download_url": f"/download/{out_path.name}",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log_error("sensitivity_export_by_prompt", e)
+        raise HTTPException(status_code=422, detail=str(e))
 
 
 @app.get("/download/{filename}")
