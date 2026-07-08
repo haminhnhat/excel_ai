@@ -1,0 +1,46 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# Keep local upload/model folders but ignore user files
+uploads/*
+!uploads/.gitkeep
+models/*
+!models/.gitkeep
+!models/README.md
+
+# Generated outputs and logs
+outputs/*
+!outputs/.gitkeep
+logs/*
+!logs/.gitkeep
+data/*
+!data/.gitkeep
+secrets/*
+
+# Windows shortcuts are machine/path specific.
+*.lnk
+
+# Offline dependency cache
+vendor/wheels/*
+!vendor/wheels/README.md
+
+# Uploaded onboarding workbooks/profiles created during local testing
+uploads/onboarding/*
+
+# Excel files
+*.xlsx
+*.xlsm
+*.xls
+~$*.xlsx
+~$*.xlsm
+
+.codegraph/*
+
+.cursor/*
+
+config/*

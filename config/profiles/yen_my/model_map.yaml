@@ -1,0 +1,249 @@
+metadata:
+  name: "NOXH Yên Mỹ BKD"
+  version: "0.1"
+  currency: "VND"
+  note: >
+    Mapping generated for the uploaded workbook. Verify all cells before production use.
+    AI may only modify inputs listed here.
+
+settings:
+  allow_formula_overwrite: false
+  default_outputs:
+    - profit_after_tax
+    - project_npv
+    - project_irr
+    - equity_npv
+    - equity_irr
+    - roi
+    - total_investment
+
+inputs:
+  investment_cost_change:
+    sheet: "1. Tổng hợp"
+    cell: "C38"
+    type: "percent"
+    editable: true
+    allow_formula_overwrite: true
+    min: -0.30
+    max: 1.00
+    unit: "decimal"
+    description: "Tỷ lệ thay đổi TMĐT. 0.2 = tăng 20%."
+    aliases:
+      - "tong muc dau tu"
+      - "tổng mức đầu tư"
+      - "tmdt"
+      - "tmđt"
+      - "chi phi dau tu"
+      - "chi phí đầu tư"
+
+  selling_price_change:
+    sheet: "1. Tổng hợp"
+    cell: "C37"
+    type: "percent"
+    editable: true
+    allow_formula_overwrite: true
+    min: -0.50
+    max: 1.00
+    unit: "decimal"
+    description: "Tỷ lệ thay đổi giá bán. -0.05 = giảm 5%."
+    aliases:
+      - "gia ban"
+      - "giá bán"
+      - "don gia ban"
+      - "đơn giá bán"
+
+  loan_interest_rate:
+    sheet: "4. Vay"
+    cell: "E7"
+    type: "percent"
+    editable: true
+    min: 0.00
+    max: 0.25
+    unit: "decimal"
+    description: "Lãi vay ngân hàng. 0.08 = 8%/năm. Ghi vào ô input lãi suất trong sheet 4. Vay."
+    aliases:
+      - "lai vay"
+      - "lãi vay"
+      - "lai suat"
+      - "lãi suất"
+      - "lãi vay ngân hàng"
+      - "lai suat vay"
+      - "lãi suất vay"
+      - "lai ngan hang"
+      - "lãi ngân hàng"
+      - "interest rate"
+      - "chi phi von vay"
+      - "chi phí vốn vay"
+
+  vat_rate:
+    sheet: "1. Tổng hợp"
+    cell: "D24"
+    type: "percent"
+    editable: true
+    min: 0.00
+    max: 0.15
+    unit: "decimal"
+    description: "Thuế VAT."
+    aliases:
+      - "vat"
+      - "thue vat"
+      - "thuế vat"
+
+  cit_rate:
+    sheet: "1. Tổng hợp"
+    cell: "D25"
+    type: "percent"
+    editable: true
+    min: 0.00
+    max: 0.35
+    unit: "decimal"
+    description: "Thuế thu nhập doanh nghiệp / CIT."
+    aliases:
+      - "tndn"
+      - "thuế tndn"
+      - "thue tndn"
+      - "cit"
+
+  selling_cost_rate:
+    sheet: "1. Tổng hợp"
+    cell: "D20"
+    type: "percent"
+    editable: true
+    min: 0.00
+    max: 0.20
+    unit: "decimal"
+    description: "Chi phí hoa hồng đại lý, môi giới. D19 là công thức tổng D20 + D21 nên không ghi trực tiếp vào D19."
+    aliases:
+      - "chi phi ban hang"
+      - "chi phí bán hàng"
+      - "hoa hong"
+      - "hoa hồng"
+      - "moi gioi"
+      - "môi giới"
+      - "sales cost"
+      - "selling cost"
+
+  marketing_rate:
+    sheet: "1. Tổng hợp"
+    cell: "D21"
+    type: "percent"
+    editable: true
+    min: 0.00
+    max: 0.20
+    unit: "decimal"
+    description: "Chi phí truyền thông marketing."
+    aliases:
+      - "marketing"
+      - "truyen thong"
+      - "truyền thông"
+
+  admin_cost_rate:
+    sheet: "1. Tổng hợp"
+    cell: "D23"
+    type: "percent"
+    editable: true
+    min: 0.00
+    max: 0.20
+    unit: "decimal"
+    description: "Chi phí quản lý doanh nghiệp."
+    aliases:
+      - "chi phi quan ly"
+      - "chi phí quản lý"
+      - "g&a"
+
+outputs:
+  profit_after_tax:
+    sheet: "7. P&L TOÀN DỰ ÁN"
+    cell: "C24"
+    type: "currency"
+    unit: "VND"
+    description: "Lợi nhuận sau thuế thu nhập doanh nghiệp."
+    aliases:
+      - "loi nhuan sau thue"
+      - "lợi nhuận sau thuế"
+      - "lnst"
+      - "profit after tax"
+      - "pat"
+
+  project_irr:
+    sheet: "1. Tổng hợp"
+    cell: "D5"
+    type: "percent"
+    unit: "decimal"
+    description: "IRR dự án."
+    aliases:
+      - "irr du an"
+      - "irr dự án"
+      - "project irr"
+      - "irr"
+
+  project_npv:
+    sheet: "1. Tổng hợp"
+    cell: "D6"
+    type: "currency"
+    unit: "VND"
+    description: "NPV dự án."
+    aliases:
+      - "npv du an"
+      - "npv dự án"
+      - "project npv"
+      - "npv"
+
+  equity_irr:
+    sheet: "1. Tổng hợp"
+    cell: "D7"
+    type: "percent"
+    unit: "decimal"
+    description: "IRR chủ đầu tư."
+    aliases:
+      - "irr chu dau tu"
+      - "irr chủ đầu tư"
+      - "equity irr"
+      - "investor irr"
+
+  equity_npv:
+    sheet: "1. Tổng hợp"
+    cell: "D8"
+    type: "currency"
+    unit: "VND"
+    description: "NPV chủ đầu tư."
+    aliases:
+      - "npv chu dau tu"
+      - "npv chủ đầu tư"
+      - "equity npv"
+      - "investor npv"
+
+  roi:
+    sheet: "1. Tổng hợp"
+    cell: "D9"
+    type: "percent"
+    unit: "decimal"
+    description: "Return on Investment."
+    aliases:
+      - "roi"
+      - "return on investment"
+
+  bank_loan:
+    sheet: "1. Tổng hợp"
+    cell: "D11"
+    type: "currency"
+    unit: "VND"
+    description: "Vay ngân hàng."
+    aliases:
+      - "vay ngan hang"
+      - "vay ngân hàng"
+      - "bank loan"
+      - "khoan vay"
+
+  total_investment:
+    sheet: "1. Tổng hợp"
+    cell: "C33"
+    type: "currency"
+    unit: "VND"
+    description: "TMĐT sau điều chỉnh theo model."
+    aliases:
+      - "tong muc dau tu"
+      - "tổng mức đầu tư"
+      - "tmdt"
+      - "tmđt"
+      - "total investment"
