@@ -49,12 +49,22 @@ def main() -> None:
     settings = read_settings(package / ".env")
     template = read_settings(ROOT / "packaging/client/client.env")
     metadata = json.loads((package / "build-info.json").read_text(encoding="utf-8"))
+    public = metadata.get("edition") == "public"
     assert settings.keys() == template.keys()
     for key in settings.keys() - {"MODEL_PATH", "MODEL_PROFILE"}:
         assert settings[key] == template[key], key
     assert settings["MODEL_PROFILE"] == metadata["profile"]
     model = (package / settings["MODEL_PATH"]).resolve()
-    assert model.is_relative_to(package / "models") and model.is_file()
+    assert model.is_relative_to(package / "models")
+    if public:
+        assert not settings["MODEL_PROFILE"] and not model.exists()
+        assert "workbook_sha256" not in metadata
+        workbook_suffixes = {".xlsx", ".xlsm", ".xls", ".xlsb", ".xltx", ".xltm", ".xlam"}
+        assert not any(Path(name).suffix.lower() in workbook_suffixes for name in names)
+        assert not any(path.is_file() for path in (package / "config").rglob("*"))
+        assert not any(path.is_file() for path in (package / "models").rglob("*"))
+    else:
+        assert model.is_file()
     for name in ("logs", "uploads", "outputs"):
         assert not list((package / name).iterdir())
     passed("Archive integrity, complete manifest, clean configuration and no private/admin files")
@@ -79,8 +89,9 @@ def main() -> None:
     assert json.loads(bat.stdout)["user_site_disabled"]
     passed("Named BAT launcher works from a relocated path containing spaces")
 
-    original_hash = hashlib.sha256(model.read_bytes()).hexdigest()
-    assert original_hash == metadata["workbook_sha256"]
+    if not public:
+        original_hash = hashlib.sha256(model.read_bytes()).hexdigest()
+        assert original_hash == metadata["workbook_sha256"]
     with socket.socket() as occupied:
         occupied.bind(("127.0.0.1", 0))
         occupied.listen()
@@ -112,17 +123,29 @@ def main() -> None:
                 with urllib.request.urlopen(url, timeout=10) as response:
                     assert b"Excel AI Controller" in response.read()
                 passed("HTTP interface and health work; occupied port is handled automatically")
-                body = urllib.parse.urlencode({"command": "Cho toi NPV va IRR hien tai",
+                if public:
+                    assert health["available_profiles"] == []
+                    result = subprocess.run([
+                        str(python), "-I", "-B", str(ROOT / "scripts/verify_public_onboarding.py"),
+                        "--url", url, "--work-dir", str(work / "synthetic-input"),
+                    ], cwd=package, env=env, capture_output=True, text=True, encoding="utf-8",
+                        errors="replace", timeout=180)
+                    (work / "public-onboarding.log").write_text(result.stdout + result.stderr, encoding="utf-8")
+                    print(result.stdout, flush=True)
+                    assert result.returncode == 0, result.stderr
+                    passed("Public first-run upload, mapping, Excel scenario, download and profile reuse")
+                else:
+                    body = urllib.parse.urlencode({"command": "Cho toi NPV va IRR hien tai",
                                                "model_profile": settings["MODEL_PROFILE"], "engine": "xlwings"}).encode()
-                with urllib.request.urlopen(url + "/api/scenario", body, timeout=90) as response:
-                    result = json.load(response)
-                assert result["ok"], result
-                assert result["result"]["outputs"]
-                assert not result["result"]["applied_changes"]
-                with urllib.request.urlopen(url + result["download_url"], timeout=10) as response:
-                    assert response.read(2) == b"PK"
-                assert hashlib.sha256(model.read_bytes()).hexdigest() == original_hash
-                passed("Real Excel scenario and download work with default workbook; source unchanged")
+                    with urllib.request.urlopen(url + "/api/scenario", body, timeout=90) as response:
+                        result = json.load(response)
+                    assert result["ok"], result
+                    assert result["result"]["outputs"]
+                    assert not result["result"]["applied_changes"]
+                    with urllib.request.urlopen(url + result["download_url"], timeout=10) as response:
+                        assert response.read(2) == b"PK"
+                    assert hashlib.sha256(model.read_bytes()).hexdigest() == original_hash
+                    passed("Real Excel scenario and download work with default workbook; source unchanged")
             finally:
                 process.terminate()
                 try:

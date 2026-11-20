@@ -34,21 +34,31 @@ def copy_file(source: Path, target: Path) -> None:
 def build() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=ROOT / "outputs/portable")
-    parser.add_argument("--model", type=Path, required=True, help="Private .xlsx workbook to include locally")
-    parser.add_argument("--profile-map", type=Path, required=True, help="Private model_map.yaml to include locally")
-    parser.add_argument("--profile", default="client_model", help="Profile identifier inside the client package")
+    parser.add_argument("--public", action="store_true", help="Build without any workbook or customer profile")
+    parser.add_argument("--model", type=Path, help="Private .xlsx workbook to include locally")
+    parser.add_argument("--profile-map", type=Path, help="Private model_map.yaml to include locally")
+    parser.add_argument("--profile", help="Profile identifier inside the client package")
     args = parser.parse_args()
     if sys.platform != "win32" or sys.version_info[:2] != (3, 13) or struct.calcsize("P") != 8:
         parser.error("Build with 64-bit Python 3.13 on Windows.")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", args.profile):
-        parser.error("Profile must contain only letters, digits, underscores or hyphens.")
-    model = args.model.resolve()
-    profile = args.profile_map.resolve()
-    if model.suffix.lower() != ".xlsx":
-        parser.error("The default workbook must be an .xlsx file.")
-    for required in (model, profile):
-        if not required.is_file():
-            parser.error(f"Missing required client data: {required}")
+    model = profile = None
+    if args.public:
+        if args.model is not None or args.profile_map is not None or args.profile is not None:
+            parser.error("Public packages cannot include client --model, --profile-map or --profile options.")
+        profile_name = ""
+    else:
+        if args.model is None or args.profile_map is None:
+            parser.error("Client packages require --model and --profile-map; use --public for an empty app.")
+        profile_name = args.profile or "client_model"
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", profile_name):
+            parser.error("Profile must contain only letters, digits, underscores or hyphens.")
+        model = args.model.resolve()
+        profile = args.profile_map.resolve()
+        if model.suffix.lower() != ".xlsx":
+            parser.error("The default workbook must be an .xlsx file.")
+        for required in (model, profile):
+            if not required.is_file():
+                parser.error(f"Missing required client data: {required}")
 
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -62,7 +72,8 @@ def build() -> None:
         raise RuntimeError(f"Python archive checksum mismatch: {runtime_zip}")
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    package = output / f"Excel_AI_Controller_Client_{stamp}"
+    edition = "Public" if args.public else "Client"
+    package = output / f"Excel_AI_Controller_{edition}_{stamp}"
     package.mkdir()  # Never overwrite a previously built client package.
     runtime = package / "runtime"
     with zipfile.ZipFile(runtime_zip) as archive:
@@ -83,33 +94,43 @@ def build() -> None:
         if source.is_file() and source.suffix.lower() in {".html", ".css", ".js", ".svg", ".png", ".ico", ".woff2"}:
             copy_file(source, package / source.relative_to(ROOT))
     copy_file(ROOT / "assets/icons/excel_ai_controller.ico", package / "assets/icons/excel_ai_controller.ico")
-    copy_file(model, package / "models/base_model.xlsx")
-    copy_file(profile, package / "config/profiles" / args.profile / "model_map.yaml")
+    if not args.public:
+        copy_file(model, package / "models/base_model.xlsx")
+        copy_file(profile, package / "config/profiles" / profile_name / "model_map.yaml")
     for name in ("launch.py", "Excel AI Controller.bat", "READ_ME.txt"):
         copy_file(ROOT / "packaging/client" / name, package / name)
+    if args.public:
+        copy_file(ROOT / "packaging/public/READ_ME.txt", package / "READ_ME.txt")
     env_template = (ROOT / "packaging/client/client.env").read_text(encoding="utf-8")
     (package / ".env").write_text(
-        env_template.replace("MODEL_PROFILE=client_model", f"MODEL_PROFILE={args.profile}"), encoding="utf-8"
+        env_template.replace("MODEL_PROFILE=client_model", f"MODEL_PROFILE={profile_name}"), encoding="utf-8"
     )
     copy_file(requirements, package / requirements.name)
-    for name in ("outputs", "uploads", "logs"):
-        (package / name).mkdir()
+    empty_dirs = ("outputs", "uploads", "logs", "models", "config/profiles")
+    for name in empty_dirs:
+        (package / name).mkdir(parents=True, exist_ok=True)
 
     metadata = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "platform": "Windows x64", "python_version": PYTHON_VERSION,
         "python_url": PYTHON_URL, "python_sha256": PYTHON_SHA256,
-        "profile": args.profile, "workbook_sha256": digest(model),
+        "edition": edition.lower(), "profile": profile_name,
         "configuration": "Local mock parser; no API keys; no license administration",
     }
+    if model is not None:
+        metadata["workbook_sha256"] = digest(model)
     (package / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     subprocess.run([str(runtime / "python.exe"), "-I", "-B", str(package / "launch.py"), "--check"],
                    cwd=package, check=True, timeout=60)
     # Keep third-party notices, but omit caches, tests and machine-specific console scripts.
     excluded = {"__pycache__", "tests", "test", "bin", "Scripts"}
+    excluded_suffixes = {".pyc"}
+    if args.public:
+        # xlwings ships example workbooks; they are not needed by this app.
+        excluded_suffixes.update({".xlsx", ".xlsm", ".xls", ".xlsb", ".xltx", ".xltm", ".xlam"})
     files = [path for path in sorted(package.rglob("*")) if path.is_file()
              and not excluded.intersection(path.relative_to(package).parts)
-             and path.suffix.lower() != ".pyc"]
+             and path.suffix.lower() not in excluded_suffixes]
     manifest = package / "SHA256SUMS.txt"
     manifest.write_text("".join(f"{digest(path)}  {path.relative_to(package).as_posix()}\n" for path in files), encoding="utf-8")
     files.append(manifest)
@@ -117,7 +138,7 @@ def build() -> None:
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for path in files:
             archive.write(path, f"{package.name}/{path.relative_to(package).as_posix()}")
-        for name in ("outputs", "uploads", "logs"):
+        for name in empty_dirs:
             archive.writestr(f"{package.name}/{name}/", "")
     print(json.dumps({"zip": str(zip_path), "sha256": digest(zip_path), "bytes": zip_path.stat().st_size}, indent=2), flush=True)
 

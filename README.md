@@ -26,6 +26,21 @@ AI không được tự ý sửa ô bất kỳ trong workbook. Hệ thống ch�
 
 ## Dành cho người dùng không kỹ thuật
 
+**Bản portable public cho Windows 64-bit:** tải `Excel_AI_Controller_Public_*.zip`
+từ [GitHub Releases](https://github.com/haminhnhat/excel_ai/releases/latest), giải nén
+toàn bộ rồi mở `Excel AI Controller.bat`. Bản này kèm Python và thư viện, không cần
+tự cài Python và không chứa workbook/profile khách hàng.
+
+App mở ở `Setup new Excel file`: chọn Excel của bạn, bấm `Analyze`, kiểm tra
+mapping, `Validate selection` rồi `Create profile`. Sau đó dùng `Run scenario`.
+Máy vẫn cần Microsoft Excel desktop để tính lại công thức. Khi mở lại app,
+chọn profile đã lưu và chọn lại workbook trong `Run scenario`.
+
+Không chạy trực tiếp bên trong ZIP. Không chia sẻ lại thư mục đã sử dụng vì
+`uploads`, `config/profiles`, `outputs` và `logs` có thể chứa dữ liệu riêng.
+
+### Chạy Từ Mã Nguồn
+
 Nếu bạn chỉ cần sử dụng app:
 
 1. Mở thư mục project.

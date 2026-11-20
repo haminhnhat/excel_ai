@@ -82,11 +82,16 @@ def main() -> None:
 
     model = ROOT / os.environ["MODEL_PATH"]
     profile = ROOT / "config/profiles" / os.environ["MODEL_PROFILE"] / "model_map.yaml"
-    if not model.is_file() or not profile.is_file():
+    metadata = json.loads((ROOT / "build-info.json").read_text(encoding="utf-8"))
+    edition = metadata.get("edition", "client")
+    if edition not in {"public", "client"}:
+        raise RuntimeError("Invalid package edition. Extract the complete ZIP again.")
+    if edition == "client" and (not model.is_file() or not profile.is_file()):
         raise RuntimeError("Default workbook/profile missing. Extract the complete ZIP again.")
     if args.check:
         print(json.dumps({
             "ok": True,
+            "edition": edition,
             "python": sys.version,
             "executable": sys.executable,
             "isolated": bool(sys.flags.isolated),
