@@ -1,5 +1,50 @@
 # Excel AI Controller
 
+## Tải App Và Dùng Ngay
+
+**[TẢI APP CHO WINDOWS: ZIP PUBLIC, KHOẢNG 26 MB](https://github.com/haminhnhat/excel_ai/releases/download/public-portable-v0.1.0/Excel_AI_Controller_Public_20261120_155111.zip)**
+
+Không cần biết lập trình, cài Python, tạo môi trường hay chạy lệnh. Bản ZIP này
+đã kèm Python và các thư viện cần thiết, không kèm workbook hay dữ liệu khách hàng.
+
+> **Tránh tải nhầm:** không chọn **Code → Download ZIP**, **Source code (zip)**
+> hoặc **Source code (tar.gz)**. Đây là mã nguồn dành cho người phát triển,
+> không phải bản app mở lên dùng ngay. Hãy dùng link **TẢI APP** ở trên.
+
+**Máy cần có:** Windows 10/11 64-bit và Microsoft Excel bản cài trên máy để tính
+lại công thức. Excel Online trên trình duyệt không thay thế được Excel desktop.
+
+### Mở App Trong 3 Bước
+
+1. Bấm **TẢI APP** ở trên để tải file `Excel_AI_Controller_Public_20261120_155111.zip`.
+2. Nhấp chuột phải vào ZIP → **Extract All / Giải nén tất cả**. Chọn một thư mục
+   như Documents, rồi mở thư mục vừa giải nén. **Không chạy app ngay trong ZIP.**
+3. Nhấp đúp **`Excel AI Controller.bat`**. Trình duyệt sẽ tự mở app khi sẵn sàng.
+
+Giữ cửa sổ app đang chạy mở trong lúc sử dụng. Khi dùng xong, nhấn **Ctrl+C**
+trong cửa sổ đó để dừng app; chỉ đóng tab trình duyệt thì app vẫn chạy.
+Nếu trình duyệt không tự mở, dùng địa chỉ `http://127.0.0.1:...` hiện trong cửa sổ app.
+
+### Thêm File Excel Của Bạn
+
+1. Trong **Setup new Excel file**, chọn file `.xlsx` hoặc `.xlsm` của bạn.
+2. Bấm **Analyze workbook**, kiểm tra các ô đầu vào/đầu ra và mapping được đề xuất.
+3. Sửa các ô chưa đúng, bấm **Validate selection**, rồi **Create profile**.
+4. Chuyển sang **Run scenario** để chạy với file và profile vừa tạo.
+
+Mapping là đề xuất tự động, cần được kiểm tra trước khi chạy. Khi mở lại app,
+chọn profile đã lưu và chọn lại workbook trong **Run scenario**.
+
+**Lưu ý dữ liệu:** chỉ chia sẻ ZIP Public nguyên gốc. Không chia sẻ lại thư mục
+đã sử dụng vì file tải lên, profile, kết quả và log có thể chứa dữ liệu riêng.
+
+Nếu cần tìm bản phát hành khác, mở [GitHub Releases](https://github.com/haminhnhat/excel_ai/releases)
+và chọn file **`Excel_AI_Controller_Public_*.zip`** trong phần **Assets**, không chọn Source code.
+
+---
+
+## Thông Tin Kỹ Thuật
+
 Ứng dụng này giúp người dùng nội bộ chạy mô hình tài chính Excel bằng câu lệnh tự nhiên, ví dụ:
 
 ```text
@@ -24,24 +69,10 @@ Câu lệnh người dùng
 
 AI không được tự ý sửa ô bất kỳ trong workbook. Hệ thống chỉ được sửa các ô input đã được duyệt trong `model_map.yaml`.
 
-## Dành cho người dùng không kỹ thuật
-
-**Bản portable public cho Windows 64-bit:** tải `Excel_AI_Controller_Public_*.zip`
-từ [GitHub Releases](https://github.com/haminhnhat/excel_ai/releases/latest), giải nén
-toàn bộ rồi mở `Excel AI Controller.bat`. Bản này kèm Python và thư viện, không cần
-tự cài Python và không chứa workbook/profile khách hàng.
-
-App mở ở `Setup new Excel file`: chọn Excel của bạn, bấm `Analyze`, kiểm tra
-mapping, `Validate selection` rồi `Create profile`. Sau đó dùng `Run scenario`.
-Máy vẫn cần Microsoft Excel desktop để tính lại công thức. Khi mở lại app,
-chọn profile đã lưu và chọn lại workbook trong `Run scenario`.
-
-Không chạy trực tiếp bên trong ZIP. Không chia sẻ lại thư mục đã sử dụng vì
-`uploads`, `config/profiles`, `outputs` và `logs` có thể chứa dữ liệu riêng.
-
 ### Chạy Từ Mã Nguồn
 
-Nếu bạn chỉ cần sử dụng app:
+**Phần này dành cho người phát triển hoặc IT. Nếu đã tải ZIP Public ở đầu trang,
+bạn không cần thực hiện các bước dưới đây hoặc chạy `Setup_First_Time.bat`.**
 
 1. Mở thư mục project.
 2. Double-click `Setup_First_Time.bat` trong lần đầu tiên.
